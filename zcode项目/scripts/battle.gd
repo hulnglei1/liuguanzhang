@@ -605,9 +605,10 @@ func _update_dashboard() -> void:
 	dash_stat_rng.text = "🎯 射  程: %d 格" % u.rng
 
 	if "dragon_slash" in u.skill_ids:
-		dash_gimmick_title.text = "🐉 千里青龙势 (跑得越远斩得越狠)"
-		dash_gimmick_title.add_theme_color_override("font_color", Color(0.3, 1.0, 0.6))
-		dash_gimmick_desc.text = "蓄力 %d/10 格 (威力倍率 %.1fx)\n💡 移动即可蓄力！骑乘赵云效率×2！满10格全屏出刀！" % [u.charge, CombatCore.dragon_charge_multiplier(u.charge)]
+		var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
+		dash_gimmick_title.text = "🐉 千里青龙势 · %s" % dt.name
+		dash_gimmick_title.add_theme_color_override("font_color", dt.color)
+		dash_gimmick_desc.text = "多回合逃窜蓄势: %d/10格 (倍率 %.1fx)\n💡 绕场跑图叠气势！受击气乱扣3格！满10格【劈山裂城】一击必杀！" % [u.charge, CombatCore.dragon_charge_multiplier(u.charge)]
 		dash_gimmick_bar.value = u.charge * 10
 	elif "roar" in u.skill_ids:
 		dash_gimmick_title.text = "⚡ 燕人咆哮 (怒吼蓄力)"
@@ -1308,13 +1309,18 @@ func _do_move(cell: Vector2i) -> void:
 	if "dragon_slash" in u.skill_ids:
 		var eff := SkillsCore.mounted_charge_efficiency() if u.is_mounted() else 1
 		u.charge = clampi(u.charge + moved_cells * eff, 0, 10)
-		info_label.text = "关羽蓄力 → %d/10（跑 %d 格）！跑得越远，斩得越狠！" % [u.charge, moved_cells]
+		var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
+		info_label.text = "关羽多回合逃窜蓄力 → %d/10【%s】！跑得越远，青龙越巨！" % [u.charge, dt.name]
 		if u.charge >= 10:
-			_spawn_float_text(u.cell, "蓄力拉满！青龙出世！", Color(0.3, 1.0, 0.5), true)
+			_spawn_float_text(u.cell, "🐉 劈山裂城！百丈真龙显圣！", Color(0.2, 1.0, 0.4), true)
+		elif u.charge >= 7:
+			_spawn_float_text(u.cell, "🐉 龙吟震天！百丈青龙成型！", Color(0.3, 0.9, 0.6), true)
+		elif u.charge >= 4:
+			_spawn_float_text(u.cell, "🐉 青龙腾云！刀芒暴涨！", Color(0.4, 0.85, 0.9), false)
 		elif u.is_mounted():
 			_spawn_float_text(u.cell, "赵云汗血飞驰！双倍充能！", Color(0.4, 0.9, 1.0))
 		else:
-			_spawn_float_text(u.cell, "马哥撑住！冲刺中！", Color(0.5, 0.8, 0.9))
+			_spawn_float_text(u.cell, "马哥撑住！逃跑蓄力中！", Color(0.5, 0.8, 0.9))
 	else:
 		info_label.text = "%s 移动到 (%d,%d)" % [u.name, cell.x, cell.y]
 	_clear_overlay()
@@ -1390,18 +1396,18 @@ func _do_skill(cell: Vector2i) -> void:
 	match skill_id:
 		"dragon_slash":
 			if u.charge < 10:
-				info_label.text = "蓄力不足！当前 %d/10，跑够 10 格再释放满蓄力龙斩！" % u.charge
+				var dt_cur: Dictionary = CombatCore.dragon_charge_tier(u.charge)
+				info_label.text = "【%s】(当前 %d/10)！需多回合持续绕场奔跑、避开敌袭不被打断，蓄满10格方能施展【劈山裂城】！" % [dt_cur.name, u.charge]
+				_spawn_float_text(u.cell, "气势未满！继续跑图蓄势(%d/10)！" % u.charge, Color(0.4, 0.85, 0.9))
 				_select_unit(u.id)
 				return
-			# 满蓄力大招演出
-			if u.charge >= 10:
-				_big_moment("千里·青龙斩！！")
-				_spawn_float_text(u.cell, "这什么魔鬼伤害？！一刀带走！", Color(0.3, 1.0, 0.5), true)
-			else:
-				_spawn_banner("蓄力龙斩", Color(0.3, 0.9, 0.5))
+			# 满蓄力大招演出：天地变色 + 百丈真龙 + 城关轰塌
+			_big_moment("🐉 劈山裂城 · 千里青龙偃月斩！！")
+			_spawn_float_text(u.cell, "💥 汜水关城墙崩塌！诸侯皆被整麻了！", Color(0.2, 1.0, 0.45), true)
+			_shake_camera(6.0)
 			if t:
-				_spawn_dragon(u.cell, t.cell)
-				_spawn_burst(t.cell, Color(0.3, 0.9, 0.5, 0.4), 1)
+				_spawn_dragon(u.cell, t.cell, 10)
+				_spawn_burst(t.cell, Color(0.2, 1.0, 0.45, 0.6), 3)
 			events = SkillsCore.do_dragon_slash(u, t)
 		"roar":
 			_spawn_banner("燕人咆哮！", Color(0.9, 0.7, 0.2))
@@ -1449,8 +1455,16 @@ func _apply_events(events: Array) -> void:
 					var is_crit: bool = ev.get("crit", false) or int(ev.get("value", 0)) >= 50
 					var dmg_str: String = ("💥暴击 -%d" if is_crit else "-%d") % ev.value
 					var dmg_col: Color = Color(1.0, 0.85, 0.2) if is_crit else Color(1, 0.4, 0.3)
-					_spawn_float_text(t.cell, dmg_str, dmg_col, is_crit)
 					info_label.text += "\n%s 受到 %d 伤害！" % [t.name, ev.value]
+
+					# 关羽千里逃窜蓄力被打断机制（契合原著小说：最怕蓄力中途被敌摸到）
+					if t.id == "guanyu" and t.charge > 0:
+						var lost_charge: int = mini(t.charge, 3)
+						t.charge -= lost_charge
+						_spawn_float_text(t.cell, "💥 受击气乱！蓄力中断(-%d)！" % lost_charge, Color(1.0, 0.35, 0.35), true)
+						info_label.text += "\n关羽遭敌截击气脉受挫！青龙蓄力跌落 %d 格！快派刘备张飞阻敌掩护！" % lost_charge
+						_sync_text(t)
+
 					# 昌豨怯战：受击后DEF-30%
 					if "feigui" in t.skill_ids and not t.coward_debuff:
 						t.coward_debuff = true
@@ -1605,8 +1619,10 @@ func _screen_flash(color: Color, duration: float = 0.25) -> void:
 	tw.tween_property(rect, "modulate:a", 0.0, duration)
 	tw.tween_callback(rect.queue_free)
 
-## 千里·青龙横贯：多层碧霄龙刃辉光 + 爆破龙鳞 + 冲击新星
-func _spawn_dragon(from_cell: Vector2i, to_cell: Vector2i) -> void:
+## 千里·青龙横贯：多层碧霄龙刃辉光 + 爆破龙鳞 + 冲击新星（支持多阶青龙形态）
+func _spawn_dragon(from_cell: Vector2i, to_cell: Vector2i, charge: int = 10) -> void:
+	var dt: Dictionary = CombatCore.dragon_charge_tier(charge)
+	var max_w: float = dt.get("width", 110.0)
 	var start_px := _cell_to_px(from_cell)
 	var end_px := _cell_to_px(to_cell)
 	var dir := (end_px - start_px).normalized()
@@ -1616,29 +1632,29 @@ func _spawn_dragon(from_cell: Vector2i, to_cell: Vector2i) -> void:
 	beam_root.z_index = 40
 	unit_root.add_child(beam_root)
 
-	# 1. 外层青龙破空气流（宽 44px）
+	# 1. 外层青龙破空气流（满蓄力宽达 120px）
 	var outer_line := Line2D.new()
 	outer_line.points = PackedVector2Array([start_px, end_px])
-	outer_line.width = 44.0
-	outer_line.default_color = Color(0.12, 0.85, 0.55, 0.35)
+	outer_line.width = max_w
+	outer_line.default_color = Color(0.15, 0.95, 0.5, 0.45)
 	outer_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
 	outer_line.end_cap_mode = Line2D.LINE_CAP_ROUND
 	beam_root.add_child(outer_line)
 
-	# 2. 中层天青龙气巨柱（宽 22px）
+	# 2. 中层天青龙气巨柱
 	var mid_line := Line2D.new()
 	mid_line.points = PackedVector2Array([start_px, end_px])
-	mid_line.width = 22.0
-	mid_line.default_color = Color(0.25, 1.0, 0.65, 0.85)
+	mid_line.width = max_w * 0.48
+	mid_line.default_color = Color(0.35, 1.0, 0.7, 0.9)
 	mid_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
 	mid_line.end_cap_mode = Line2D.LINE_CAP_ROUND
 	beam_root.add_child(mid_line)
 
-	# 3. 内层白炽贯穿核（宽 7px）
+	# 3. 内层白炽贯穿核
 	var core_line := Line2D.new()
 	core_line.points = PackedVector2Array([start_px, end_px])
-	core_line.width = 7.0
-	core_line.default_color = Color(0.95, 1.0, 0.95, 1.0)
+	core_line.width = max(max_w * 0.16, 10.0)
+	core_line.default_color = Color(1.0, 1.0, 0.95, 1.0)
 	core_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
 	core_line.end_cap_mode = Line2D.LINE_CAP_ROUND
 	beam_root.add_child(core_line)

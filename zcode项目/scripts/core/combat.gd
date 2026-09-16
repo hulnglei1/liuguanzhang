@@ -17,6 +17,65 @@ static func dragon_charge_multiplier(charge_cells: int) -> float:
 	var c: int = clampi(charge_cells, 0, 10)
 	return 0.5 + 0.3 * float(c)
 
+## 原著关羽千里蓄力四阶蜕变（初阶微芒 -> 中阶腾云 -> 高阶百丈 -> 极阶劈山裂城）
+static func dragon_charge_tier(charge: int) -> Dictionary:
+	var c: int = clampi(charge, 0, 10)
+	if c >= 10:
+		return {
+			"tier": 4,
+			"name": "极阶 · 劈山裂城神威青龙",
+			"title": "🐉 劈山裂城！百丈青龙真身降世！",
+			"mult": 3.5,
+			"width": 120.0,
+			"fx": "dragon_mountain_breaker",
+			"can_shatter_gate": true,
+			"color": Color(0.2, 1.0, 0.45)
+		}
+	elif c >= 7:
+		return {
+			"tier": 3,
+			"name": "高阶 · 百丈怒龙冲霄",
+			"title": "🐉 龙吟震天！百丈怒龙威压全场！",
+			"mult": 0.5 + 0.3 * float(c),
+			"width": 85.0,
+			"fx": "dragon_giant",
+			"can_shatter_gate": false,
+			"color": Color(0.3, 0.9, 0.6)
+		}
+	elif c >= 4:
+		return {
+			"tier": 2,
+			"name": "中阶 · 青龙腾云逐日",
+			"title": "🐉 刀势如虹！青龙腾云咆哮！",
+			"mult": 0.5 + 0.3 * float(c),
+			"width": 60.0,
+			"fx": "dragon_soar",
+			"can_shatter_gate": false,
+			"color": Color(0.35, 0.85, 0.8)
+		}
+	elif c >= 1:
+		return {
+			"tier": 1,
+			"name": "初阶 · 青龙微芒破晓",
+			"title": "🐉 逃兵绕场！青龙微芒初现！",
+			"mult": 0.5 + 0.3 * float(c),
+			"width": 38.0,
+			"fx": "dragon_breeze",
+			"can_shatter_gate": false,
+			"color": Color(0.6, 0.75, 0.85)
+		}
+	else:
+		return {
+			"tier": 0,
+			"name": "未蓄力 · 寻常刀势",
+			"title": "寻常刀法（打Boss如刮痧）",
+			"mult": 0.5,
+			"width": 24.0,
+			"fx": "dragon",
+			"can_shatter_gate": false,
+			"color": Color(0.7, 0.7, 0.7)
+		}
+
 ## 张飞【断桥怒吼】：待机蓄力轮数 = 蓄力值，倍率 = 0.6 × (1 + 轮数)（上限 3 轮 = 2.4 倍）
 static func roar_charge_multiplier(charge_turns: int) -> float:
 	var t: int = clampi(charge_turns, 0, 3)
