@@ -594,7 +594,7 @@ func _update_dashboard() -> void:
 	dash_stat_atk.text = "⚔️ 攻击力: %d%s" % [u.effective_atk(), hill_tag]
 	dash_stat_def.text = "🛡️ 防御力: %d%s" % [u.effective_def(), hill_tag]
 	dash_stat_mov.text = "👟 移动力: %d 格" % u.mov
-	dash_stat_rng.text = "🎯 射  程: %d 格" % u.rng
+	dash_stat_rng.text = "🎯 射  程: %s" % u.get_attack_shape_desc()
 
 	if "dragon_slash" in u.skill_ids:
 		var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
@@ -603,10 +603,15 @@ func _update_dashboard() -> void:
 		dash_gimmick_desc.text = "多回合逃窜蓄势: %d/10格 (倍率 %.1fx)\n💡 绕场跑图叠气势！受击气脉震散直接清零！满10格【劈山裂城】一击必杀！" % [u.charge, CombatCore.dragon_charge_multiplier(u.charge)]
 		dash_gimmick_bar.value = u.charge * 10
 	elif "roar" in u.skill_ids:
-		dash_gimmick_title.text = "⚡ 燕人咆哮 (怒吼蓄力)"
+		dash_gimmick_title.text = "🗣️ 燕人战吼 · 震慑敌胆"
 		dash_gimmick_title.add_theme_color_override("font_color", Color(1.0, 0.8, 0.3))
-		dash_gimmick_desc.text = "咆哮蓄力 %d/3 轮\n💡 待机蓄力！满 3 轮怒吼大范围眩晕敌人！" % u.charge
-		dash_gimmick_bar.value = (float(u.charge) / 3.0) * 100
+		var cd_rem: int = u.cds.get("roar", 0)
+		if cd_rem > 0:
+			dash_gimmick_desc.text = "战吼回气冷却中（剩余 %d 回合）\n💡 原著天生神嗓！开局即吼，震得周围敌军眩晕瘫痪！" % cd_rem
+			dash_gimmick_bar.value = (float(maxi(0, 3 - cd_rem)) / 3.0) * 100
+		else:
+			dash_gimmick_desc.text = "绝技【燕人战吼】已就绪（开局即用）！\n💡 开嗓直接吼！震得敌军失聪目眩、群体瘫痪1回合！"
+			dash_gimmick_bar.value = 100
 	elif u.id == "huaxiong":
 		dash_gimmick_title.text = "🩸 逃兵狂热 (拖延暴怒)"
 		dash_gimmick_title.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2))
@@ -1123,13 +1128,10 @@ func _show_command_menu() -> void:
 		btn_skill.pressed.connect(_cmd_skill)
 		list_vbox.add_child(btn_skill)
 
-	# 3. 待机/蓄力
+	# 3. 待机休整
 	var btn_wait := Button.new()
 	btn_wait.custom_minimum_size = Vector2(136, 34)
-	if "roar" in u.skill_ids:
-		btn_wait.text = "🛡️ 蓄力(%d/3)" % u.charge
-	else:
-		btn_wait.text = "🛡️ 待机休整"
+	btn_wait.text = "🛡️ 待机休整"
 	btn_wait.pressed.connect(_cmd_wait)
 	list_vbox.add_child(btn_wait)
 
@@ -1348,7 +1350,7 @@ func _cmd_undo_move() -> void:
 
 func _has_attackable_target(u) -> bool:
 	for t in units:
-		if t.alive and t.camp != u.camp and GridCore.chebyshev(u.cell, t.cell) <= u.rng:
+		if t.alive and t.camp != u.camp and GridCore.can_attack(u.cell, t.cell, u.is_cavalry(), u.rng):
 			return true
 	return false
 
@@ -1380,10 +1382,15 @@ func _cmd_attack() -> void:
 	if u:
 		var targets: Array[Vector2i] = []
 		for t in units:
-			if t.alive and t.camp != u.camp and GridCore.chebyshev(u.cell, t.cell) <= u.rng:
+			if t.alive and t.camp != u.camp and GridCore.can_attack(u.cell, t.cell, u.is_cavalry(), u.rng):
 				targets.append(t.cell)
 		_draw_cells(targets, Color(0.95, 0.25, 0.2, 0.5))
-		info_label.text = "点红框内的敌军发动攻击"
+		if u.is_cavalry():
+			info_label.text = "【骑兵十字】点击十字正向红框敌军发起冲锋攻击（不可斜打）"
+		elif u.rng >= 2:
+			info_label.text = "【远程射击】点击射程内红框敌军发起射击"
+		else:
+			info_label.text = "【步兵八向】点击周围红框敌军发起攻击（可斜向挥砍）"
 
 func _cmd_skill() -> void:
 	input_mode = InputMode.SKILL
@@ -1409,20 +1416,14 @@ func _cmd_wait() -> void:
 	if u:
 		_do_wait(u)
 
-## 待机：张飞咆哮类蓄力+1轮；否则单纯结束行动
+## 待机休整
 func _do_wait(u) -> void:
 	_clear_overlay()
 	command_menu.visible = false
 	u.acted = true
 	move_origin_cell = Vector2i(-1, -1)
 	move_gained_charge = 0
-	# 若张飞有蓄力型咆哮技能，待机=蓄力
-	if "roar" in u.skill_ids and u.charge < 3:
-		u.charge += 1
-		info_label.text = "张飞蓄力 → %d/3 轮！满蓄力怒吼可眩晕大范围！" % u.charge
-		_spawn_float_text(u.cell, "气沉丹田...蓄力中！(%d/3)" % u.charge, Color(1.0, 0.85, 0.2))
-	else:
-		info_label.text = "%s 待机（跳过本回合）" % u.name
+	info_label.text = "%s 待机休整（本回合行动完毕）" % u.name
 	_after_action(u)
 
 ## ---------- 移动 ----------
@@ -1495,7 +1496,7 @@ func _animate_move(u, path: Array) -> void:
 func _is_in_attack_range(cell: Vector2i) -> bool:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
 	var t: BattleUnitScript = _unit_at(cell)
-	return t != null and t.camp != u.camp and GridCore.chebyshev(u.cell, cell) <= u.rng
+	return u != null and t != null and t.alive and t.camp != u.camp and GridCore.can_attack(u.cell, cell, u.is_cavalry(), u.rng)
 
 func _do_attack(cell: Vector2i) -> void:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
@@ -1504,12 +1505,16 @@ func _do_attack(cell: Vector2i) -> void:
 	command_menu.visible = false
 	var events := SkillsCore.do_attack(u, t)
 	_apply_events(events)
-	# 敌方反击判定：若目标仍存活且未被眩晕，且攻击者在目标射程内，触发反击！
-	if t and t.alive and not t.is_stunned() and GridCore.chebyshev(t.cell, u.cell) <= t.rng:
-		_spawn_float_text(t.cell, "⚡ 阵地反击！", Color(1.0, 0.65, 0.2))
-		var counter_ev := SkillsCore.do_counter_attack(t, u)
-		_apply_events(counter_ev)
-		_unit_bounce(t.id)
+	# 敌方反击判定：若目标仍存活且未被眩晕，且攻击者在反击射程范围内，触发反击！
+	if t and t.alive and not t.is_stunned():
+		if GridCore.can_attack(t.cell, u.cell, t.is_cavalry(), t.rng):
+			_spawn_float_text(t.cell, "⚡ 阵地反击！", Color(1.0, 0.65, 0.2))
+			var counter_ev := SkillsCore.do_counter_attack(t, u)
+			_apply_events(counter_ev)
+			_unit_bounce(t.id)
+		elif t.is_cavalry() and GridCore.chebyshev(t.cell, u.cell) == 1:
+			# 曹操传精髓：步兵斜角白嫖骑兵，骑兵无法斜向反击！
+			_spawn_float_text(t.cell, "🛡️ 斜角受挫！无法反击！", Color(0.4, 0.9, 1.0))
 	u.acted = true
 	move_origin_cell = Vector2i(-1, -1)
 	move_gained_charge = 0
@@ -2036,13 +2041,12 @@ func _run_enemy_turn() -> void:
 			else:
 				_ai_attack(u, target)
 		else:
-			var dist := GridCore.chebyshev(u.cell, target.cell)
-			if dist <= u.rng:
+			if GridCore.can_attack(u.cell, target.cell, u.is_cavalry(), u.rng):
 				_ai_attack(u, target)
 			else:
 				_move_toward(u, target.cell)
 				await get_tree().create_timer(0.1).timeout
-				if GridCore.chebyshev(u.cell, target.cell) <= u.rng:
+				if GridCore.can_attack(u.cell, target.cell, u.is_cavalry(), u.rng):
 					_ai_attack(u, target)
 	# 敌回合结束
 	for u in _camp_units("enemy"):
@@ -2099,11 +2103,13 @@ func _ai_attack(u, target) -> void:
 	if target.alive and not target.is_stunned():
 		if target.id == "liubei":
 			_spawn_float_text(target.cell, "别打脸！我全靠长相混饭吃！", Color(1.0, 0.45, 0.45))
-		if GridCore.chebyshev(target.cell, u.cell) <= target.rng:
+		if GridCore.can_attack(target.cell, u.cell, target.is_cavalry(), target.rng):
 			_spawn_float_text(target.cell, "⚡ 阵地反击！", Color(0.4, 0.9, 1.0))
 			var counter_ev := SkillsCore.do_counter_attack(target, u)
 			_apply_events(counter_ev)
 			_unit_bounce(target.id)
+		elif target.is_cavalry() and GridCore.chebyshev(target.cell, u.cell) == 1:
+			_spawn_float_text(target.cell, "🛡️ 斜向受制！", Color(0.8, 0.8, 0.8))
 
 	if not target.alive:
 		_check_defeat()

@@ -13,8 +13,8 @@ const SKILL_META := {
 		"max_charge": 10, "desc": "上下左右定向挥刀，贯穿被击点及后方直线，射程随蓄力暴涨",
 	},
 	"roar": {
-		"name": "断桥怒吼", "cd": 4, "charge_type": "wait",
-		"max_charge": 3, "desc": "待机蓄力轮数=威力，满蓄力眩晕",
+		"name": "燕人战吼", "cd": 3, "charge_type": "none",
+		"max_charge": 0, "desc": "张飞：开局即吼，无需蓄力！范围音波震晕1回合（冷却3回合）",
 	},
 	"seven_dash": {
 		"name": "七进七出", "cd": 3, "charge_type": "none",
@@ -100,23 +100,20 @@ static func do_dragon_slash(caster, target, pierced_targets: Array = []) -> Arra
 	caster.start_cd("dragon_slash", meta("dragon_slash").cd)
 	return ev
 
-## 结算【断桥怒吼】（张飞）
-## 蓄力轮数=威力；满蓄力(3)眩晕目标1回合
+## 结算【燕人战吼】（张飞）
+## 原著小说设定：无需蓄力，开局即可吼，纯CD机制！震得敌军失聪目眩（100%眩晕1回合）
 static func do_roar(caster, targets: Array) -> Array:
-	var mult: float = CombatCore.roar_charge_multiplier(caster.charge)
-	var full: bool = caster.charge >= 3
+	var mult: float = 1.6
 	var ev: Array = []
 	for t in targets:
 		var dmg: int = CombatCore.damage(caster.effective_atk(), mult, t.effective_def())
 		t.take_damage(dmg)
 		ev.append(CombatCore.make_damage_event(t.id, dmg, false))
+		t.stun_turns = max(t.stun_turns, 1)
+		ev.append({"type": "stun", "target": t.id, "turns": 1})
 		if not t.alive:
 			ev.append({"type": "death", "target": t.id})
-	if full:
-		for t in targets:
-			t.stun_turns = max(t.stun_turns, 1)
-			ev.append({"type": "stun", "target": t.id, "turns": 1})
-	ev.append({"type": "skill", "skill_id": "roar", "caster": caster.id, "fx": "roar", "full": full})
+	ev.append({"type": "skill", "skill_id": "roar", "caster": caster.id, "fx": "roar", "full": true})
 	caster.charge = 0
 	caster.start_cd("roar", meta("roar").cd)
 	return ev

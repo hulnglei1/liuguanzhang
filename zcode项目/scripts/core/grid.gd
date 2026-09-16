@@ -6,6 +6,11 @@ const DIRS4: Array[Vector2i] = [
 	Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
 ]
 
+const DIRS8: Array[Vector2i] = [
+	Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1),
+]
+
 ## 格子是否在地图内
 static func in_bounds(cell: Vector2i, w: int, h: int) -> bool:
 	return cell.x >= 0 and cell.y >= 0 and cell.x < w and cell.y < h
@@ -117,4 +122,39 @@ static func line_cells(start: Vector2i, target: Vector2i, line_len: int, w: int,
 			out.append(cur)
 		else:
 			break
+	return out
+
+## 曹操传攻击判定：目标是否在攻击者的普攻范围内
+## - 骑兵（is_cavalry）：十字 4 向，不可斜打（当 rng == 1 时）
+## - 步兵（非骑兵且 rng == 1）：周围 8 向，可斜打
+## - 远程（rng >= 2）：切比雪夫距离 <= rng
+static func can_attack(attacker_cell: Vector2i, target_cell: Vector2i, is_cavalry: bool, rng: int) -> bool:
+	if attacker_cell == target_cell:
+		return false
+	if rng >= 2:
+		return chebyshev(attacker_cell, target_cell) <= rng
+	if is_cavalry:
+		return (target_cell - attacker_cell) in DIRS4
+	else:
+		return chebyshev(attacker_cell, target_cell) <= 1
+
+## 获取普攻覆盖的所有合法地图格子（用于高亮显示）
+static func get_attack_cells(center: Vector2i, is_cavalry: bool, rng: int, w: int, h: int) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if rng >= 2:
+		for dy in range(-rng, rng + 1):
+			for dx in range(-rng, rng + 1):
+				var c := center + Vector2i(dx, dy)
+				if in_bounds(c, w, h) and chebyshev(center, c) <= rng and c != center:
+					out.append(c)
+	elif is_cavalry:
+		for dir in DIRS4:
+			var c := center + dir
+			if in_bounds(c, w, h):
+				out.append(c)
+	else:
+		for dir in DIRS8:
+			var c := center + dir
+			if in_bounds(c, w, h):
+				out.append(c)
 	return out

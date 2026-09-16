@@ -267,7 +267,7 @@ func _run_all_tests() -> void:
 		await click_control(btn_gy_wait, 0.2)
 		_assert(guanyu_unit.acted == true, "确认待机后关羽进入行动完毕状态！")
 
-	# 子测试 5.5: 点击张飞进行待机蓄力（测试原地待命与贴身菜单点击）
+	# 子测试 5.5: 点击张飞进行待机休整（测试原地待命与贴身菜单点击）
 	print("  -> 物理鼠标点击张飞 (1, 6) 进行选中，并再次点击自身展开指令菜单...")
 	var zhangfei_px: Vector2 = battle._cell_to_px(Vector2i(1, 6))
 	await mouse_click(zhangfei_px, false, 0.2)
@@ -278,14 +278,14 @@ func _run_all_tests() -> void:
 
 	var btn_standby: Button = find_node_by_text(battle.command_menu, "待机")
 	if btn_standby == null:
-		btn_standby = find_node_by_text(battle.command_menu, "蓄力")
-	_assert(btn_standby != null, "成功在张飞军令菜单中找到【待机/蓄力】按钮")
+		btn_standby = find_node_by_text(battle.command_menu, "休整")
+	_assert(btn_standby != null, "成功在张飞军令菜单中找到【待机休整】按钮")
 	if btn_standby:
-		print("  -> 物理鼠标点击【待机/蓄力】按钮...")
+		print("  -> 物理鼠标点击【待机休整】按钮...")
 		await click_control(btn_standby, 0.2)
 		var zhangfei_unit = battle._unit_by_id("zhangfei")
 		_assert(zhangfei_unit.acted == true, "张飞成功待机休整（acted == true）！")
-		_assert(zhangfei_unit.charge == 1, "张飞待机成功叠加1层咆哮蓄力（charge == 1）！")
+		_assert(zhangfei_unit.skill_ready("roar") == true, "原著天生神嗓：张飞绝技开局就绪，无需蓄力！")
 
 	# -------------------------------------------------------------
 	# 阶段 6: 顶部战术秘籍与结束回合真手测试

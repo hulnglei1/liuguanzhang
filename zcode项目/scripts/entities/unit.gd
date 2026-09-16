@@ -167,3 +167,24 @@ func to_dict() -> Dictionary:
 		"morale_bonus": morale_bonus, "refuse_penalty": refuse_penalty,
 		"mount": mount.duplicate(),
 	}
+
+## 是否为骑兵系（十字4向攻击，不可斜打）
+func is_cavalry() -> bool:
+	if id in ["guanyu", "zhangfei", "zhaoyun", "huaxiong", "lubu", "changxi", "li_bu_fu_1", "li_bu_fu_2"]:
+		return true
+	if "骑" in cls or cls == "枪兵":
+		return true
+	return false
+
+## 是否为弓兵/远程
+func is_archer() -> bool:
+	return rng >= 2 or "弓" in cls
+
+## 获取攻击形状名称与说明
+func get_attack_shape_desc() -> String:
+	if is_archer():
+		return "远程 %d 格" % rng
+	elif is_cavalry():
+		return "十字 4 向 (不可斜打)"
+	else:
+		return "九宫 8 向 (可斜打)"
