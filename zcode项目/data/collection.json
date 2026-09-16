@@ -21,7 +21,7 @@
     {"id": "lubu_fangtian", "name": "方天乱舞", "desc": "吕布：第3击翻3倍"},
     {"id": "naked_armor", "name": "裸衣死战", "desc": "许褚：爆甲减防+吸血+双倍攻速"},
     {"id": "king_hill", "name": "占山为王", "desc": "臧霸：高地攻防+30%"},
-    {"id": "arrow_rain", "name": "拐弯箭雨", "desc": "公孙瓒：范围箭雨"}
+    {"id": "arrow_rain", "name": "回旋飞弹", "desc": "公孙瓒：全图超远视距锁定，发射定速追踪飞弹"}
   ],
   "scenes": [
     {"id": "wenjiu_huaxiong", "name": "温酒斩华雄", "desc": "关羽绕场蓄力，一刀秒掉14倍华雄"},

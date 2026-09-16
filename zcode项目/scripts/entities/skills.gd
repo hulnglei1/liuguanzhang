@@ -33,8 +33,8 @@ const SKILL_META := {
 		"max_charge": 0, "desc": "武安国：被动三倍力量",
 	},
 	"arrow_rain": {
-		"name": "拐弯箭雨", "cd": 3, "charge_type": "none",
-		"max_charge": 0, "desc": "公孙瓒：范围箭雨",
+		"name": "回旋飞弹", "cd": 0, "charge_type": "none",
+		"max_charge": 0, "desc": "公孙瓒：全图超远视距锁定，发射定速追踪飞弹（每回合推进3格）",
 	},
 	"naked_armor": {
 		"name": "裸衣死战", "cd": 4, "charge_type": "none",
@@ -201,19 +201,94 @@ static func do_lubu_attack(caster, target) -> Array:
 		ev.append({"type": "death", "target": target.id})
 	return ev
 
-## 公孙瓒·拐弯箭雨：对以 target 为中心半径2的所有敌军造成范围伤害
-static func do_arrow_rain(caster, target, all_units: Array) -> Array:
-	var ev: Array = []
-	for u in all_units:
-		if u.alive and u.camp != caster.camp and GridCore.chebyshev(u.cell, target.cell) <= 2:
-			var dmg: int = CombatCore.damage(caster.effective_atk(), 0.7, u.effective_def())
-			u.take_damage(dmg)
-			ev.append(CombatCore.make_damage_event(u.id, dmg, false))
-			if not u.alive:
-				ev.append({"type": "death", "target": u.id})
+## 公孙瓒·回旋飞弹：发射定速追踪飞弹（每回合推进 3 格，全图索敌，CD=0）
+static func do_arrow_rain(caster, target, all_units: Array = []) -> Array:
+	var dist: int = GridCore.chebyshev(caster.cell, target.cell)
+	var arrow := {
+		"id": "arrow_%d" % [randi() % 100000 + 1],
+		"caster_id": caster.id,
+		"target_id": target.id,
+		"cell": caster.cell,
+		"target_cell": target.cell,
+		"speed": 3,
+		"atk": caster.effective_atk()
+	}
 	caster.start_cd("arrow_rain", meta("arrow_rain").cd)
-	ev.append({"type": "skill", "skill_id": "arrow_rain", "caster": caster.id, "fx": "arrow_rain"})
-	return ev
+	
+	# 若目标就在 3 格之内，飞弹当回合即直达命中
+	if dist <= 3:
+		var dmg: int = CombatCore.damage(caster.effective_atk(), 1.0, target.effective_def())
+		target.take_damage(dmg)
+		var ev: Array = [
+			{"type": "skill", "skill_id": "arrow_rain", "caster": caster.id, "fx": "arrow_hit", "value": dmg, "target": target.id},
+			CombatCore.make_damage_event(target.id, dmg, false)
+		]
+		if not target.alive:
+			ev.append({"type": "death", "target": target.id})
+		return ev
+	
+	# 若目标较远，生成在空中的定速追踪飞弹实体事件（由战场主控/循环逐回合推进）
+	return [
+		{"type": "skill", "skill_id": "arrow_rain", "caster": caster.id, "fx": "fire_homing_arrow", "arrow": arrow, "target": target.id}
+	]
+
+## 更新战场上所有正在飞行追击的飞弹（每回合推进 3 格）
+## 返回本轮产生的事件（包括飞弹移动、命中伤害、目标死亡等）
+static func advance_homing_arrows(active_arrows: Array, all_units: Array, map_w: int = 12, map_h: int = 10) -> Array:
+	var events: Array = []
+	var finished_indices: Array = []
+	
+	for i in range(active_arrows.size()):
+		var arr: Dictionary = active_arrows[i]
+		var target = null
+		for u in all_units:
+			if u.id == arr.get("target_id", ""):
+				target = u
+				break
+		
+		# 若目标已死亡或消失，飞弹失去目标自然消散
+		if target == null or not target.alive:
+			events.append({"type": "arrow_lost", "arrow_id": arr.get("id")})
+			finished_indices.append(i)
+			continue
+		
+		var cur_pos: Vector2i = arr.get("cell", Vector2i(0, 0))
+		var target_pos: Vector2i = target.cell
+		var dist: int = GridCore.chebyshev(cur_pos, target_pos)
+		
+		# 若当前距离 <= 飞弹速度(3格)，本回合直接飞达并命中目标
+		if dist <= arr.get("speed", 3):
+			var dmg: int = CombatCore.damage(arr.get("atk", 20), 1.0, target.effective_def())
+			target.take_damage(dmg)
+			events.append({
+				"type": "arrow_hit", "arrow_id": arr.get("id"),
+				"target": target.id, "value": dmg, "hit_cell": target.cell
+			})
+			events.append(CombatCore.make_damage_event(target.id, dmg, false))
+			if not target.alive:
+				events.append({"type": "death", "target": target.id})
+			finished_indices.append(i)
+		else:
+			# 尚未追上：向目标方向逼近 speed 格
+			var new_cell := cur_pos
+			for s in range(arr.get("speed", 3)):
+				var step_diff: Vector2i = target_pos - new_cell
+				if step_diff == Vector2i.ZERO:
+					break
+				var step_dir := Vector2i(clampi(step_diff.x, -1, 1), clampi(step_diff.y, -1, 1))
+				new_cell += step_dir
+			arr["cell"] = new_cell
+			events.append({
+				"type": "arrow_fly", "arrow_id": arr.get("id"),
+				"from_cell": cur_pos, "to_cell": new_cell, "target": target.id
+			})
+			
+	# 从后向前移除已命中或消散的飞弹
+	finished_indices.reverse()
+	for idx in finished_indices:
+		active_arrows.remove_at(idx)
+		
+	return events
 
 ## 许褚·裸衣死战：激活绝技
 ## 1) 爆掉周围半径2（方圆）敌军战甲（armor_broken=true）

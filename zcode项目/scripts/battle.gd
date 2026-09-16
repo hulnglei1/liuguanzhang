@@ -85,6 +85,8 @@ var refuse_penalty_active := false
 var victory := false
 var gate_broken := false
 var obstacle_nodes: Dictionary = {}
+var active_arrows: Array = []          # 战场中正在飞行的回旋飞弹
+var arrow_nodes: Dictionary = {}       # arrow_id -> Node2D（飞弹视觉节点）
 
 # 输入状态机
 enum InputMode { NONE, SELECT, MOVE, ATTACK, SKILL, POST_MOVE }
@@ -1469,6 +1471,13 @@ func _cmd_skill() -> void:
 			if enemy and enemy.alive and enemy.camp != u.camp:
 				valid_cells.append(c)
 		_draw_cells(valid_cells, Color(0.95, 0.35, 0.15, 0.55))
+	elif u and "arrow_rain" in u.skill_ids:
+		info_label.text = "【白马·回旋飞弹】全图超远视距锁定！请点击全图任意敌军，发射定速追踪飞弹！"
+		var valid_cells: Array[Vector2i] = []
+		for enemy in units:
+			if enemy.alive and enemy.camp != u.camp:
+				valid_cells.append(enemy.cell)
+		_draw_cells(valid_cells, Color(0.35, 0.75, 1.0, 0.55))
 	else:
 		info_label.text = "点技能目标"
 
@@ -1625,7 +1634,7 @@ func _is_in_skill_range(cell: Vector2i) -> bool:
 		"seven_dash":
 			return GridCore.chebyshev(u.cell, cell) <= u.mov
 		"arrow_rain":
-			return GridCore.chebyshev(u.cell, cell) <= 4
+			return t != null and t.alive and t.camp != u.camp
 	return false
 
 func _do_skill(cell: Vector2i) -> void:
@@ -1689,9 +1698,11 @@ func _do_skill(cell: Vector2i) -> void:
 				_spawn_seven_dash(u.cell, t.cell, weaves)
 			events = SkillsCore.do_seven_dash(u, t, weaves)
 		"arrow_rain":
-			_spawn_banner("拐弯箭雨！", Color(0.8, 0.7, 0.3))
+			_spawn_banner("🏹 白马·定速回旋飞弹！", Color(0.4, 0.85, 1.0))
+			_spawn_float_text(u.cell, "🏹 飞弹升空！全图索敌！", Color(0.4, 0.9, 1.0), true)
+			_shake_camera(3.0)
 			if t:
-				_spawn_shockwave(t.cell, Color(0.8, 0.7, 0.3, 0.5))
+				_spawn_shockwave(t.cell, Color(0.3, 0.8, 1.0, 0.4))
 			events = SkillsCore.do_arrow_rain(u, t, units)
 		"naked_armor":
 			_big_moment("裸衣！死战！！")
@@ -1781,6 +1792,14 @@ func _apply_events(events: Array) -> void:
 					info_label.text += "\n张飞战吼震破了吕布的铁皮气罩！吕布连击与无敌尽散！"
 			"skill":
 				info_label.text += "\n【技能】%s" % ev.get("value", "")
+				if ev.get("fx") == "fire_homing_arrow":
+					var arr: Dictionary = ev.get("arrow", {})
+					_spawn_homing_arrow_node(arr)
+				elif ev.get("fx") == "arrow_hit":
+					var t_hit: BattleUnitScript = _unit_by_id(ev.target)
+					if t_hit:
+						_spawn_float_text(t_hit.cell, "💥 飞弹破空命中！", Color(0.4, 0.9, 1.0), true)
+						_spawn_burst(t_hit.cell, Color(0.4, 0.9, 1.0, 0.6), 2)
 			"stun":
 				var tar := _unit_by_id(ev.target)
 				if tar:
@@ -2094,6 +2113,59 @@ func _unit_bounce(id: String) -> void:
 	tw.tween_property(node, "scale", Vector2(1.25, 0.8), 0.06)
 	tw.tween_property(node, "scale", Vector2(1.0, 1.0), 0.12)
 
+## 生成在空中定速飞行的回旋飞弹视觉节点
+func _spawn_homing_arrow_node(arr: Dictionary) -> void:
+	active_arrows.append(arr)
+	var node := Node2D.new()
+	node.position = _cell_to_px(arr.cell)
+	node.z_index = 60
+	
+	var lbl := Label.new()
+	lbl.text = "🎯🏹"
+	lbl.add_theme_font_size_override("font_size", 16)
+	lbl.add_theme_color_override("font_color", Color(0.4, 0.9, 1.0))
+	lbl.position = Vector2(-16, -16)
+	node.add_child(lbl)
+	
+	unit_root.add_child(node)
+	arrow_nodes[arr.id] = node
+	info_label.text += "\n🏹 公孙瓒射出定速回旋飞弹！正以每回合3格速度奔袭索敌！"
+
+## 在回合流转时推进战场上所有飞行中的定速回旋飞弹
+func _update_homing_arrows() -> void:
+	if active_arrows.is_empty():
+		return
+	var evs: Array = SkillsCore.advance_homing_arrows(active_arrows, units, MAP_W, MAP_H)
+	for ev in evs:
+		match ev.get("type"):
+			"arrow_fly":
+				var node: Node2D = arrow_nodes.get(ev.arrow_id)
+				if node and is_instance_valid(node):
+					var target_px: Vector2 = _cell_to_px(ev.to_cell)
+					var tw := create_tween()
+					tw.tween_property(node, "position", target_px, 0.35).set_trans(Tween.TRANS_SINE)
+			"arrow_hit":
+				var node: Node2D = arrow_nodes.get(ev.arrow_id)
+				if node and is_instance_valid(node):
+					var tw := create_tween()
+					tw.tween_property(node, "scale", Vector2(1.5, 1.5), 0.1)
+					tw.parallel().tween_property(node, "modulate:a", 0.0, 0.2)
+					tw.tween_callback(node.queue_free)
+					arrow_nodes.erase(ev.arrow_id)
+				var t: BattleUnitScript = _unit_by_id(ev.target)
+				if t:
+					_spawn_float_text(t.cell, "💥 飞弹命中 -%d！" % ev.value, Color(0.4, 0.9, 1.0), true)
+					_spawn_burst(t.cell, Color(0.4, 0.9, 1.0, 0.6), 2)
+					info_label.text += "\n🏹 公孙瓒定速飞弹追踪命中 %s！造成 %d 伤害！" % [t.name, ev.value]
+					_sync_node(t)
+			"arrow_lost":
+				var node: Node2D = arrow_nodes.get(ev.arrow_id)
+				if node and is_instance_valid(node):
+					node.queue_free()
+					arrow_nodes.erase(ev.arrow_id)
+	_apply_events(evs)
+	_check_victory()
+
 ## 大招定格：全屏闪白 + 字幕口号 + 震动
 func _big_moment(text: String) -> void:
 	_screen_flash(Color(1, 1, 0.9, 0.5), 0.35)
@@ -2306,6 +2378,7 @@ func _ai_attack(u, target) -> void:
 		_check_defeat()
 
 func _begin_player_turn() -> void:
+	_update_homing_arrows()
 	for u in _camp_units("player"):
 		u.acted = false
 		# 玉米种子回血：每回合开始时自动恢复生命

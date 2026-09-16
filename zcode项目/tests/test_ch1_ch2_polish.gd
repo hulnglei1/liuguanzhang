@@ -24,6 +24,7 @@ func _init() -> void:
 	print("==================================================")
 	_test_chapter1_data_and_dialogs()
 	_test_chapter1_combat_and_gate()
+	_test_gongsunzan_homing_missile()
 	_test_chapter2_data_and_dialogs()
 	_test_chapter2_mount_and_zhaoyun()
 	_test_chapter2_lubu_and_zhangfei_counter()
@@ -134,6 +135,42 @@ func _test_chapter1_combat_and_gate() -> void:
 	# 模拟关羽遭截击：气脉震散清零
 	guanyu.charge = 0
 	_assert(guanyu.charge == 0, "关羽遭截击气脉震散蓄力清零（忠实还原小说）")
+
+func _test_gongsunzan_homing_missile() -> void:
+	print("\n--- 验证【公孙瓒】定速回旋飞弹（0 CD、定速3格追踪、延迟命中） ---")
+	var units_dict: Dictionary = _load_json("res://data/units.json")
+	var unit_defs: Dictionary = {}
+	for u in units_dict.get("units", []):
+		unit_defs[u.id] = u
+		
+	var gongsun = BattleUnitScript.from_data(unit_defs["gongsunzan"], Vector2i(2, 3))
+	var distant_enemy = BattleUnitScript.from_data(unit_defs["huaxiong"], Vector2i(10, 3))
+	
+	# 1. 0 CD 验证
+	_assert(SkillsCore.meta("arrow_rain").cd == 0, "公孙瓒回旋飞弹为 0 CD 绝技，每回合均可发射")
+	
+	# 2. 发射飞弹实体
+	var fire_evs: Array = SkillsCore.do_arrow_rain(gongsun, distant_enemy)
+	_assert(fire_evs.size() > 0 and fire_evs[0].get("fx") == "fire_homing_arrow", "远距离目标成功发射定速飞弹实体")
+	var arrow_data: Dictionary = fire_evs[0].get("arrow")
+	_assert(arrow_data.get("speed") == 3, "飞弹飞行速度为每回合 3 格")
+	
+	# 3. 推进第 1 回合（推进 3 格，未达目标）
+	var active_arrows: Array = [arrow_data]
+	var advance_evs1: Array = SkillsCore.advance_homing_arrows(active_arrows, [distant_enemy])
+	_assert(advance_evs1.size() > 0 and advance_evs1[0].get("type") == "arrow_fly", "第1回合飞弹朝目标向前推进 3 格")
+	_assert(active_arrows.size() == 1, "飞弹尚在途中继续飞行")
+	
+	# 4. 推进第 2 回合（再推进 3 格）
+	var advance_evs2: Array = SkillsCore.advance_homing_arrows(active_arrows, [distant_enemy])
+	_assert(advance_evs2.size() > 0 and advance_evs2[0].get("type") == "arrow_fly", "第2回合飞弹继续逼近目标")
+	
+	# 5. 推进第 3 回合（飞抵目标并命中伤害）
+	var old_hp: int = distant_enemy.hp
+	var advance_evs3: Array = SkillsCore.advance_homing_arrows(active_arrows, [distant_enemy])
+	_assert(advance_evs3.size() > 0 and advance_evs3[0].get("type") == "arrow_hit", "第3回合飞弹成功命中目标")
+	_assert(active_arrows.size() == 0, "命中后飞弹实体出膛销毁")
+	_assert(distant_enemy.hp < old_hp, "目标承受飞弹 1.0x 适度穿透伤害（%d -> %d）" % [old_hp, distant_enemy.hp])
 
 func _test_chapter2_data_and_dialogs() -> void:
 	print("\n--- 验证【第二关】赵云登场与虎牢三英对白 ---")

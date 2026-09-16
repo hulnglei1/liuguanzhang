@@ -20,8 +20,8 @@
   ],
   "enemy_spawn": [
     {"unit": "huaxiong", "x": 7, "y": 4},
-    {"unit": "dao_bing_1", "x": 6, "y": 3},
-    {"unit": "dao_bing_2", "x": 6, "y": 5},
+    {"unit": "dao_bing_1", "x": 5, "y": 4},
+    {"unit": "dao_bing_2", "x": 6, "y": 4},
     {"unit": "gong_bing_1", "x": 7, "y": 2},
     {"unit": "gong_bing_2", "x": 7, "y": 6}
   ],
