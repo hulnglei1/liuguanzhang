@@ -14,7 +14,8 @@ const BattleUnitScript := preload("res://scripts/entities/unit.gd")
 const LotteryCore := preload("res://scripts/systems/lottery.gd")
 const SaveCore := preload("res://scripts/systems/save.gd")
 
-const TILE := 48.0          # 格子像素
+const TILE := 52.0          # 格子像素（升级为52以充实画面）
+const MAP_OFFSET := Vector2(24.0, 66.0) # 棋盘左上角偏移
 const MAP_W := 12
 const MAP_H := 10
 
@@ -25,20 +26,47 @@ static var chapter_id: String = "chapter1"
 @onready var map_root: Node2D = $MapRoot
 @onready var unit_root: Node2D = $UnitRoot
 @onready var overlay: Node2D = $Overlay       # 高亮覆盖层
-@onready var info_label: Label = $UI/InfoLabel
-@onready var turn_label: Label = $UI/TurnLabel
+@onready var info_label: Label = $UI/BottomPanel/Margin/VBox/InfoLabel
+@onready var turn_label: Label = $UI/TopBar/TurnBadge/TurnLabel
+@onready var chapter_title_lbl: Label = $UI/TopBar/ChapterTitle
 @onready var dialog_box: PanelContainer = $UI/DialogBox
 @onready var dialog_text: RichTextLabel = $UI/DialogBox/Margin/VBox/Text
-@onready var dialog_btn: Button = $UI/DialogBox/Margin/VBox/NextBtn
-@onready var end_turn_btn: Button = $UI/EndTurnBtn
-@onready var help_btn: Button = $UI/HelpBtn
+@onready var dialog_btn: Button = $UI/DialogBox/Margin/VBox/BtnRow/NextBtn
+@onready var dialog_skip_btn: Button = $UI/DialogBox/Margin/VBox/BtnRow/SkipBtn
+@onready var end_turn_btn: Button = $UI/TopBar/EndTurnBtn
+@onready var help_btn: Button = $UI/TopBar/HelpBtn
+@onready var right_dashboard: PanelContainer = $UI/RightDashboard
 @onready var command_menu: VBoxContainer = $UI/CommandMenu
+
 ## 结算面板（代码构建，节点引用由 _build_result_panel 填充）
 var result_panel: PanelContainer
 var result_title: Label
 var result_body: Label
 var result_next: Button
 var result_home: Button
+
+## 右侧仪表盘子组件（由 _init_dashboard 填充）
+var dash_overview: VBoxContainer
+var dash_unit_view: VBoxContainer
+var dash_primary_obj: Label
+var dash_secondary_obj: Label
+var dash_player_count: Label
+var dash_enemy_count: Label
+
+var dash_avatar_plate: Polygon2D
+var dash_avatar_text: Label
+var dash_name_text: Label
+var dash_status_text: Label
+var dash_hp_text: Label
+var dash_hp_bar: ProgressBar
+var dash_stat_atk: Label
+var dash_stat_def: Label
+var dash_stat_mov: Label
+var dash_stat_rng: Label
+var dash_gimmick_box: PanelContainer
+var dash_gimmick_title: Label
+var dash_gimmick_desc: Label
+var dash_gimmick_bar: ProgressBar
 
 ## ---------- 运行时状态 ----------
 var units: Array = []                 # 所有 BattleUnit
@@ -65,6 +93,9 @@ var win_dialog_played := false
 func _ready() -> void:
 	_configure_display()
 	_load_chapter()
+	_apply_ui_styles()
+	_init_dashboard()
+	_draw_grid()
 	_spawn_units()
 	_apply_gear_bonuses()
 	_init_environment()
@@ -167,22 +198,386 @@ func _init_environment() -> void:
 func _is_hill(cell: Vector2i) -> bool:
 	return cell in hills
 
+func _draw_grid() -> void:
+	var grid_node := map_root.get_node_or_null("GridLines")
+	if grid_node == null:
+		return
+	for c in grid_node.get_children():
+		c.queue_free()
+	for y in range(MAP_H):
+		for x in range(MAP_W):
+			var tile_rect := ColorRect.new()
+			tile_rect.size = Vector2(TILE - 1.0, TILE - 1.0)
+			tile_rect.position = MAP_OFFSET + Vector2(x * TILE + 0.5, y * TILE + 0.5)
+			if (x + y) % 2 == 0:
+				tile_rect.color = Color(0.12, 0.16, 0.11, 0.85)
+			else:
+				tile_rect.color = Color(0.09, 0.13, 0.08, 0.85)
+			tile_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			grid_node.add_child(tile_rect)
+
 func _draw_hills() -> void:
 	for h in hills:
 		var rect := ColorRect.new()
-		rect.size = Vector2(TILE - 2, TILE - 2)
-		rect.position = Vector2(h.x * TILE + 1, h.y * TILE + 1)
-		rect.color = Color(0.5, 0.4, 0.3, 0.6)  # 山地色
+		rect.size = Vector2(TILE - 2.0, TILE - 2.0)
+		rect.position = MAP_OFFSET + Vector2(h.x * TILE + 1.0, h.y * TILE + 1.0)
+		rect.color = Color(0.48, 0.36, 0.22, 0.75)  # 泰山高地岩石色
 		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		map_root.add_child(rect)
-	# 山脉在单位之下、可选加个图例
 	if hills.size() > 0:
 		info_label.text += "\n（棕黄色格 = 山地高地，臧霸占山攻防+30%）"
 
 func _ready_init_title() -> void:
-	# 用章节标题覆盖 UI 默认文本
 	if chapter.has("title"):
-		info_label.text = chapter["title"]
+		chapter_title_lbl.text = chapter["title"]
+		info_label.text = "【%s】已就绪，请调兵遣将下达军令！" % chapter["title"]
+
+func _apply_ui_styles() -> void:
+	# 1. 顶栏样式
+	var top_panel: Panel = $UI/TopBar
+	if top_panel:
+		var top_style := StyleBoxFlat.new()
+		top_style.bg_color = Color(0.11, 0.12, 0.15, 0.98)
+		top_style.border_color = Color(0.35, 0.30, 0.22, 1.0)
+		top_style.border_width_bottom = 2
+		top_panel.add_theme_stylebox_override("panel", top_style)
+
+	# 2. 回合徽章
+	var turn_badge_node: PanelContainer = $UI/TopBar/TurnBadge
+	if turn_badge_node:
+		var turn_style := StyleBoxFlat.new()
+		turn_style.bg_color = Color(0.18, 0.35, 0.55, 0.9)
+		turn_style.set_corner_radius_all(14)
+		turn_style.border_color = Color(0.9, 0.8, 0.5, 0.8)
+		turn_style.set_border_width_all(1)
+		turn_badge_node.add_theme_stylebox_override("panel", turn_style)
+
+	# 3. 底栏战况日志
+	var bottom_panel: PanelContainer = $UI/BottomPanel
+	if bottom_panel:
+		var bottom_style := StyleBoxFlat.new()
+		bottom_style.bg_color = Color(0.10, 0.11, 0.14, 0.96)
+		bottom_style.border_color = Color(0.32, 0.28, 0.22, 1.0)
+		bottom_style.set_border_width_all(2)
+		bottom_style.set_corner_radius_all(6)
+		bottom_panel.add_theme_stylebox_override("panel", bottom_style)
+
+	# 4. 右侧战术仪表盘
+	if right_dashboard:
+		var dash_style := StyleBoxFlat.new()
+		dash_style.bg_color = Color(0.10, 0.11, 0.14, 0.96)
+		dash_style.border_color = Color(0.35, 0.30, 0.22, 1.0)
+		dash_style.set_border_width_all(2)
+		dash_style.set_corner_radius_all(6)
+		right_dashboard.add_theme_stylebox_override("panel", dash_style)
+
+	# 5. 剧情对话框（高对比度墨玉底板 + 鎏金边框，杜绝底层棋盘透字）
+	if dialog_box:
+		var dialog_style := StyleBoxFlat.new()
+		dialog_style.bg_color = Color(0.09, 0.10, 0.13, 0.98)
+		dialog_style.border_color = Color(0.85, 0.72, 0.42, 1.0)
+		dialog_style.set_border_width_all(2)
+		dialog_style.set_corner_radius_all(8)
+		dialog_box.add_theme_stylebox_override("panel", dialog_style)
+
+func _init_dashboard() -> void:
+	if right_dashboard == null:
+		return
+	for c in right_dashboard.get_children():
+		c.queue_free()
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	right_dashboard.add_child(margin)
+
+	var main_vbox := VBoxContainer.new()
+	main_vbox.add_theme_constant_override("separation", 10)
+	margin.add_child(main_vbox)
+
+	# ===== A: 战局总览视图 =====
+	dash_overview = VBoxContainer.new()
+	dash_overview.add_theme_constant_override("separation", 12)
+	main_vbox.add_child(dash_overview)
+
+	var ov_title := Label.new()
+	ov_title.text = "📜 战况总览与军机推演"
+	ov_title.add_theme_font_size_override("font_size", 18)
+	ov_title.add_theme_color_override("font_color", Color(0.95, 0.85, 0.55))
+	dash_overview.add_child(ov_title)
+
+	var obj_panel := PanelContainer.new()
+	dash_overview.add_child(obj_panel)
+	var obj_box := VBoxContainer.new()
+	obj_box.add_theme_constant_override("separation", 6)
+	obj_panel.add_child(obj_box)
+
+	dash_primary_obj = Label.new()
+	dash_primary_obj.text = "🎯 主要军令：斩杀敌方主将【华雄】"
+	dash_primary_obj.add_theme_color_override("font_color", Color(1, 0.9, 0.6))
+	dash_primary_obj.add_theme_font_size_override("font_size", 15)
+	obj_box.add_child(dash_primary_obj)
+
+	dash_secondary_obj = Label.new()
+	dash_secondary_obj.text = "⭐ 战术目标：5 回合内速胜（防止敌方援军压境）"
+	dash_secondary_obj.add_theme_color_override("font_color", Color(0.8, 0.85, 0.9))
+	dash_secondary_obj.add_theme_font_size_override("font_size", 13)
+	obj_box.add_child(dash_secondary_obj)
+
+	var count_row := HBoxContainer.new()
+	count_row.add_theme_constant_override("separation", 24)
+	dash_overview.add_child(count_row)
+
+	dash_player_count = Label.new()
+	dash_player_count.text = "🛡️ 我方健在：3 / 3"
+	dash_player_count.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0))
+	dash_player_count.add_theme_font_size_override("font_size", 14)
+	count_row.add_child(dash_player_count)
+
+	dash_enemy_count = Label.new()
+	dash_enemy_count.text = "⚔️ 敌军存活：4 / 4"
+	dash_enemy_count.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
+	dash_enemy_count.add_theme_font_size_override("font_size", 14)
+	count_row.add_child(dash_enemy_count)
+
+	var tips_panel := PanelContainer.new()
+	dash_overview.add_child(tips_panel)
+	var tips_box := VBoxContainer.new()
+	tips_box.add_theme_constant_override("separation", 4)
+	tips_panel.add_child(tips_box)
+
+	var tips_title := Label.new()
+	tips_title.text = "💡 破局军机要策："
+	tips_title.add_theme_color_override("font_color", Color(0.9, 0.8, 0.5))
+	tips_title.add_theme_font_size_override("font_size", 14)
+	tips_box.add_child(tips_title)
+
+	var tips_content := Label.new()
+	tips_content.text = "• 关羽【千里·青龙斩】：每移动 1 格蓄力+1（骑乘赵云效率翻倍）。跑得越远伤害越高！满 10 格可全屏必杀！\n• 张飞【燕人咆哮】：使用【待机】积蓄怒吼轮数，满 3 轮可大范围强力眩晕敌军！\n• 华雄战力随回合膨胀，切勿打阵地持久战！"
+	tips_content.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tips_content.add_theme_font_size_override("font_size", 13)
+	tips_content.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+	tips_box.add_child(tips_content)
+
+	var prompt_lbl := Label.new()
+	prompt_lbl.text = "👉 点击左侧战场上的任意武将，下达军令或查看属性"
+	prompt_lbl.add_theme_font_size_override("font_size", 13)
+	prompt_lbl.add_theme_color_override("font_color", Color(0.6, 0.8, 0.6))
+	dash_overview.add_child(prompt_lbl)
+
+	# ===== B: 武将详细属性与操作视图 =====
+	dash_unit_view = VBoxContainer.new()
+	dash_unit_view.add_theme_constant_override("separation", 8)
+	dash_unit_view.visible = false
+	main_vbox.add_child(dash_unit_view)
+
+	var header_row := HBoxContainer.new()
+	header_row.add_theme_constant_override("separation", 12)
+	dash_unit_view.add_child(header_row)
+
+	var avatar_ctrl := Control.new()
+	avatar_ctrl.custom_minimum_size = Vector2(48, 48)
+	header_row.add_child(avatar_ctrl)
+
+	dash_avatar_plate = Polygon2D.new()
+	dash_avatar_plate.polygon = _make_circle_polygon(22.0, 16)
+	dash_avatar_plate.position = Vector2(24, 24)
+	dash_avatar_plate.color = Color(0.2, 0.5, 0.3)
+	avatar_ctrl.add_child(dash_avatar_plate)
+
+	dash_avatar_text = Label.new()
+	dash_avatar_text.text = "关"
+	dash_avatar_text.position = Vector2(4, 4)
+	dash_avatar_text.size = Vector2(40, 40)
+	dash_avatar_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dash_avatar_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	dash_avatar_text.add_theme_font_size_override("font_size", 20)
+	dash_avatar_text.add_theme_color_override("font_color", Color(1, 1, 1))
+	avatar_ctrl.add_child(dash_avatar_text)
+
+	var name_box := VBoxContainer.new()
+	name_box.add_theme_constant_override("separation", 2)
+	header_row.add_child(name_box)
+
+	dash_name_text = Label.new()
+	dash_name_text.text = "关羽 [武圣 · 骑兵]"
+	dash_name_text.add_theme_font_size_override("font_size", 17)
+	dash_name_text.add_theme_color_override("font_color", Color(0.95, 0.85, 0.45))
+	name_box.add_child(dash_name_text)
+
+	dash_status_text = Label.new()
+	dash_status_text.text = "我方主力 · ● 待命中"
+	dash_status_text.add_theme_font_size_override("font_size", 12)
+	dash_status_text.add_theme_color_override("font_color", Color(0.4, 0.9, 0.5))
+	name_box.add_child(dash_status_text)
+
+	var hp_vbox := VBoxContainer.new()
+	hp_vbox.add_theme_constant_override("separation", 3)
+	dash_unit_view.add_child(hp_vbox)
+
+	dash_hp_text = Label.new()
+	dash_hp_text.text = "生命值: 450 / 450"
+	dash_hp_text.add_theme_font_size_override("font_size", 13)
+	dash_hp_text.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+	hp_vbox.add_child(dash_hp_text)
+
+	dash_hp_bar = ProgressBar.new()
+	dash_hp_bar.custom_minimum_size = Vector2(0, 12)
+	dash_hp_bar.max_value = 100
+	dash_hp_bar.value = 100
+	dash_hp_bar.show_percentage = false
+	var hp_fill_style := StyleBoxFlat.new()
+	hp_fill_style.bg_color = Color(0.22, 0.85, 0.40)
+	hp_fill_style.set_corner_radius_all(3)
+	var hp_bg_style := StyleBoxFlat.new()
+	hp_bg_style.bg_color = Color(0.15, 0.16, 0.18)
+	hp_bg_style.set_corner_radius_all(3)
+	dash_hp_bar.add_theme_stylebox_override("fill", hp_fill_style)
+	dash_hp_bar.add_theme_stylebox_override("background", hp_bg_style)
+	hp_vbox.add_child(dash_hp_bar)
+
+	var stat_grid := GridContainer.new()
+	stat_grid.columns = 2
+	stat_grid.add_theme_constant_override("h_separation", 20)
+	stat_grid.add_theme_constant_override("v_separation", 4)
+	dash_unit_view.add_child(stat_grid)
+
+	dash_stat_atk = Label.new()
+	dash_stat_atk.text = "⚔️ 攻击力: 30"
+	dash_stat_atk.add_theme_font_size_override("font_size", 13)
+	stat_grid.add_child(dash_stat_atk)
+
+	dash_stat_def = Label.new()
+	dash_stat_def.text = "🛡️ 防御力: 12"
+	dash_stat_def.add_theme_font_size_override("font_size", 13)
+	stat_grid.add_child(dash_stat_def)
+
+	dash_stat_mov = Label.new()
+	dash_stat_mov.text = "👟 移动力: 6 格"
+	dash_stat_mov.add_theme_font_size_override("font_size", 13)
+	stat_grid.add_child(dash_stat_mov)
+
+	dash_stat_rng = Label.new()
+	dash_stat_rng.text = "🎯 射  程: 1 格"
+	dash_stat_rng.add_theme_font_size_override("font_size", 13)
+	stat_grid.add_child(dash_stat_rng)
+
+	dash_gimmick_box = PanelContainer.new()
+	dash_unit_view.add_child(dash_gimmick_box)
+
+	var gim_box := VBoxContainer.new()
+	gim_box.add_theme_constant_override("separation", 3)
+	dash_gimmick_box.add_child(gim_box)
+
+	dash_gimmick_title = Label.new()
+	dash_gimmick_title.text = "🐉 千里青龙势"
+	dash_gimmick_title.add_theme_font_size_override("font_size", 14)
+	dash_gimmick_title.add_theme_color_override("font_color", Color(0.3, 1.0, 0.6))
+	gim_box.add_child(dash_gimmick_title)
+
+	dash_gimmick_desc = Label.new()
+	dash_gimmick_desc.text = "蓄力 0/10 格\n跑得越远斩得越狠！"
+	dash_gimmick_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dash_gimmick_desc.add_theme_font_size_override("font_size", 12)
+	dash_gimmick_desc.add_theme_color_override("font_color", Color(0.8, 0.9, 0.8))
+	gim_box.add_child(dash_gimmick_desc)
+
+	dash_gimmick_bar = ProgressBar.new()
+	dash_gimmick_bar.custom_minimum_size = Vector2(0, 8)
+	dash_gimmick_bar.max_value = 100
+	dash_gimmick_bar.value = 0
+	dash_gimmick_bar.show_percentage = false
+	var gim_fill_style := StyleBoxFlat.new()
+	gim_fill_style.bg_color = Color(0.3, 1.0, 0.6)
+	gim_fill_style.set_corner_radius_all(2)
+	var gim_bg_style := StyleBoxFlat.new()
+	gim_bg_style.bg_color = Color(0.15, 0.16, 0.18)
+	gim_bg_style.set_corner_radius_all(2)
+	dash_gimmick_bar.add_theme_stylebox_override("fill", gim_fill_style)
+	dash_gimmick_bar.add_theme_stylebox_override("background", gim_bg_style)
+	gim_box.add_child(dash_gimmick_bar)
+
+func _update_dashboard() -> void:
+	if dash_overview == null or dash_unit_view == null:
+		return
+	var u: BattleUnitScript = _unit_by_id(selected_id)
+	if u == null or not u.alive:
+		dash_overview.visible = true
+		dash_unit_view.visible = false
+		dash_player_count.text = "🛡️ 我方在列：%d 人" % _camp_units("player").size()
+		dash_enemy_count.text = "⚔️ 敌方存活：%d 人" % _camp_units("enemy").size()
+		var commander := _enemy_commander()
+		if commander and commander.alive:
+			dash_primary_obj.text = "🎯 主要军令：斩杀敌方主将【%s】(HP: %d/%d)" % [commander.name, commander.hp, commander.max_hp]
+		else:
+			dash_primary_obj.text = "🎉 敌将已被击溃！大获全胜！"
+		return
+
+	dash_overview.visible = false
+	dash_unit_view.visible = true
+
+	dash_avatar_plate.color = _character_base_color(u)
+	dash_avatar_text.text = _character_calligraphy(u)
+	dash_name_text.text = "%s [%s]" % [u.name, u.cls]
+	if u.camp == "player":
+		dash_name_text.add_theme_color_override("font_color", Color(0.95, 0.85, 0.45))
+		dash_status_text.text = "我方部队 · %s" % ("已行动" if u.acted else "● 待命中")
+		dash_status_text.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6) if u.acted else Color(0.4, 0.9, 0.5))
+	else:
+		dash_name_text.add_theme_color_override("font_color", Color(1.0, 0.4, 0.35))
+		dash_status_text.text = "敌方阵营 · %s" % ("主将" if u.is_commander else "精锐")
+		dash_status_text.add_theme_color_override("font_color", Color(1.0, 0.5, 0.4))
+
+	if u.is_stunned():
+		dash_status_text.text += " · 💫 眩晕中"
+	if u.is_mounted():
+		dash_status_text.text += " · 🐎 骑乘合体"
+
+	dash_hp_text.text = "生命值: %d / %d" % [u.hp, u.max_hp]
+	dash_hp_bar.value = float(u.hp) / float(max(u.max_hp, 1)) * 100.0
+
+	dash_stat_atk.text = "⚔️ 攻击力: %d" % u.effective_atk()
+	dash_stat_def.text = "🛡️ 防御力: %d" % u.effective_def()
+	dash_stat_mov.text = "👟 移动力: %d 格" % u.mov
+	dash_stat_rng.text = "🎯 射  程: %d 格" % u.rng
+
+	if "dragon_slash" in u.skill_ids:
+		dash_gimmick_title.text = "🐉 千里青龙势 (跑得越远斩得越狠)"
+		dash_gimmick_title.add_theme_color_override("font_color", Color(0.3, 1.0, 0.6))
+		dash_gimmick_desc.text = "蓄力 %d/10 格 (威力倍率 %.1fx)\n💡 移动即可蓄力！骑乘赵云效率×2！满10格全屏出刀！" % [u.charge, CombatCore.dragon_charge_multiplier(u.charge)]
+		dash_gimmick_bar.value = u.charge * 10
+	elif "roar" in u.skill_ids:
+		dash_gimmick_title.text = "⚡ 燕人咆哮 (怒吼蓄力)"
+		dash_gimmick_title.add_theme_color_override("font_color", Color(1.0, 0.8, 0.3))
+		dash_gimmick_desc.text = "咆哮蓄力 %d/3 轮\n💡 待机蓄力！满 3 轮怒吼大范围眩晕敌人！" % u.charge
+		dash_gimmick_bar.value = (float(u.charge) / 3.0) * 100
+	elif u.id == "huaxiong":
+		dash_gimmick_title.text = "🩸 逃兵狂热 (拖延暴怒)"
+		dash_gimmick_title.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2))
+		dash_gimmick_desc.text = "已拖延 %d 回合，攻击强化 %.2fx (当前 ATK: %d)\n⚠ 必须速战速决！" % [u.hua_rage_turns, CombatCore.hua_boost_multiplier(u.hua_rage_turns), u.effective_atk()]
+		dash_gimmick_bar.value = min(u.hua_rage_turns * 20, 100)
+	elif "lubu_fangtian" in u.skill_ids:
+		dash_gimmick_title.text = "🔥 鬼神方天 (方天连击)"
+		dash_gimmick_title.add_theme_color_override("font_color", Color(0.9, 0.4, 1.0))
+		dash_gimmick_desc.text = "连击段数 %d/3 (下一击倍率 %.1fx)\n⚠ 连击跨回合保留，第3击翻3倍！用张飞怒吼打断！" % [u.fangtian_combo, 3.0 if u.fangtian_combo >= 2 else 1.0]
+		dash_gimmick_bar.value = (float(u.fangtian_combo) / 3.0) * 100
+	elif "naked_armor" in u.skill_ids:
+		dash_gimmick_title.text = "🛡️ 裸衣死战"
+		dash_gimmick_title.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+		dash_gimmick_desc.text = "状态：%s\n💡 爆甲减防50%%，双倍攻速+吸血恢复！" % ("吸血死战中！" if u.lifesteal_active else "蓄势待发")
+		dash_gimmick_bar.value = 100 if u.lifesteal_active else 0
+	elif "king_hill" in u.skill_ids:
+		dash_gimmick_title.text = "⛰️ 占山为王"
+		dash_gimmick_title.add_theme_color_override("font_color", Color(0.8, 0.7, 0.4))
+		dash_gimmick_desc.text = "高地状态：%s\n💡 占领棕黄高地格攻防额外+30%%" % ("【已占山】攻防大增！" if u.on_hill else "未占领高地")
+		dash_gimmick_bar.value = 100 if u.on_hill else 0
+	else:
+		dash_gimmick_title.text = "⚔️ 兵种特性"
+		dash_gimmick_title.add_theme_color_override("font_color", Color(0.7, 0.8, 0.9))
+		dash_gimmick_desc.text = "【%s】常规战阵部队" % u.cls
+		dash_gimmick_bar.value = 0
 
 func _configure_display() -> void:
 	# 窗口/相机对齐
@@ -247,31 +642,161 @@ func _make_unit_node(u) -> Node2D:
 	var node := Node2D.new()
 	node.position = _cell_to_px(u.cell)
 	node.z_index = 10
-	# 色块占位 + 名字
-	var rect := ColorRect.new()
-	rect.size = Vector2(TILE - 8, TILE - 8)
-	rect.position = Vector2(4, 4)
-	rect.color = _camp_color(u.camp)
-	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	node.add_child(rect)
-	var lbl := Label.new()
-	lbl.text = u.name
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.size = Vector2(TILE - 8, 20)
-	lbl.position = Vector2(4, TILE - 22)
-	lbl.add_theme_font_size_override("font_size", 10)
-	node.add_child(lbl)
+
+	# 1. 底部微阴影
+	var shadow := Polygon2D.new()
+	shadow.name = "Shadow"
+	shadow.polygon = _make_circle_polygon(TILE * 0.42, 14)
+	shadow.position = Vector2(0, 3)
+	shadow.color = Color(0, 0, 0, 0.4)
+	node.add_child(shadow)
+
+	# 2. 外层金属令牌边框（金边我方 / 铜红边敌方）
+	var rim := Polygon2D.new()
+	rim.name = "Rim"
+	rim.polygon = _make_circle_polygon(TILE * 0.40, 16)
+	var rim_color := Color(0.92, 0.78, 0.36) if u.camp == "player" else Color(0.85, 0.35, 0.30)
+	if u.is_commander:
+		rim_color = Color(1.0, 0.88, 0.45)
+	rim.color = rim_color
+	node.add_child(rim)
+
+	# 3. 内核将牌底盘
+	var plate := Polygon2D.new()
+	plate.name = "Plate"
+	plate.polygon = _make_circle_polygon(TILE * 0.34, 16)
+	plate.color = _character_base_color(u)
+	node.add_child(plate)
+
+	# 4. 中心书法粗体大字
+	var char_lbl := Label.new()
+	char_lbl.name = "CharLabel"
+	char_lbl.text = _character_calligraphy(u)
+	char_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	char_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	char_lbl.position = Vector2(-16, -15)
+	char_lbl.size = Vector2(32, 30)
+	char_lbl.add_theme_font_size_override("font_size", 17)
+	char_lbl.add_theme_color_override("font_color", Color(1, 0.98, 0.92))
+	node.add_child(char_lbl)
+
+	# 5. 头顶悬浮动态血条 (背景 + 填充)
+	var bar_bg := ColorRect.new()
+	bar_bg.name = "HPBarBg"
+	bar_bg.size = Vector2(36, 5)
+	bar_bg.position = Vector2(-18, -25)
+	bar_bg.color = Color(0.1, 0.1, 0.1, 0.85)
+	node.add_child(bar_bg)
+
+	var bar_fill := ColorRect.new()
+	bar_fill.name = "HPBarFill"
+	bar_fill.size = Vector2(34, 3)
+	bar_fill.position = Vector2(-17, -24)
+	bar_fill.color = Color(0.2, 0.85, 0.35)
+	node.add_child(bar_fill)
+
+	# 6. 底部名字铭牌
+	var name_lbl := Label.new()
+	name_lbl.name = "NameLabel"
+	name_lbl.text = u.name
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.position = Vector2(-36, 16)
+	name_lbl.size = Vector2(72, 16)
+	name_lbl.add_theme_font_size_override("font_size", 10)
+	name_lbl.add_theme_color_override("font_color", Color(0.95, 0.92, 0.85))
+	node.add_child(name_lbl)
+
+	# 7. 状态标签 (💫 / 🐎 / 🔥)
+	var status_lbl := Label.new()
+	status_lbl.name = "StatusLabel"
+	status_lbl.text = ""
+	status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status_lbl.position = Vector2(-18, -39)
+	status_lbl.size = Vector2(36, 16)
+	status_lbl.add_theme_font_size_override("font_size", 11)
+	node.add_child(status_lbl)
+
 	node.set_meta("unit_id", u.id)
+	_update_unit_visuals(u, node)
 	return node
+
+func _character_calligraphy(u) -> String:
+	match u.id:
+		"guanyu": return "关"
+		"zhangfei": return "张"
+		"liubei": return "刘"
+		"zhaoyun": return "云"
+		"huaxiong": return "雄"
+		"lubu": return "布"
+		"xuchu": return "褚"
+		"zangba": return "霸"
+		"changxi": return "豨"
+		"wuan_guo": return "国"
+	if u.name.length() > 0:
+		return u.name[0]
+	return "兵"
+
+func _character_base_color(u) -> Color:
+	match u.id:
+		"guanyu": return Color(0.11, 0.40, 0.22)   # 碧绿长须
+		"zhangfei": return Color(0.12, 0.22, 0.48) # 怒雷黑青
+		"liubei": return Color(0.65, 0.18, 0.22)   # 汉室玄赤
+		"zhaoyun": return Color(0.15, 0.48, 0.56)  # 银龙青霜
+		"huaxiong": return Color(0.55, 0.14, 0.14) # 西凉狂血
+		"lubu": return Color(0.40, 0.10, 0.35)     # 鬼神紫煞
+		"xuchu": return Color(0.65, 0.38, 0.12)    # 虎痴赭黄
+		"zangba": return Color(0.38, 0.30, 0.22)   # 泰山磐石
+		"changxi": return Color(0.35, 0.38, 0.25)  # 飞龟草绿
+	return Color(0.18, 0.42, 0.68) if u.camp == "player" else Color(0.68, 0.22, 0.20)
+
+func _update_unit_visuals(u, node: Node2D) -> void:
+	if node == null:
+		return
+	var fill: ColorRect = node.get_node_or_null("HPBarFill")
+	if fill:
+		var pct := clampf(float(u.hp) / float(max(u.max_hp, 1)), 0.0, 1.0)
+		fill.size.x = 34.0 * pct
+		if pct > 0.5:
+			fill.color = Color(0.2, 0.85, 0.35)
+		elif pct > 0.2:
+			fill.color = Color(0.95, 0.75, 0.2)
+		else:
+			fill.color = Color(0.9, 0.25, 0.2)
+
+	var status: Label = node.get_node_or_null("StatusLabel")
+	if status:
+		var s := ""
+		if u.is_stunned():
+			s += "💫"
+		if u.is_mounted():
+			s += "🐎"
+		if u.rage_multiplier > 1.1 or u.hua_rage_turns > 0:
+			s += "🔥"
+		if u.armor_broken:
+			s += "🛡️"
+		status.text = s
+
+	# 未行动 vs 已行动半透明调和
+	if u.camp == "player":
+		node.modulate.a = 0.6 if u.acted else 1.0
+	else:
+		node.modulate.a = 1.0
 
 func _camp_color(camp: String) -> Color:
 	return Color(0.2, 0.6, 0.9) if camp == "player" else Color(0.9, 0.3, 0.2)
 
 func _cell_to_px(cell: Vector2i) -> Vector2:
-	return Vector2(cell.x * TILE + TILE / 2, cell.y * TILE + TILE / 2)
+	return MAP_OFFSET + Vector2(cell.x * TILE + TILE / 2.0, cell.y * TILE + TILE / 2.0)
 
 func _px_to_cell(pos: Vector2) -> Vector2i:
-	return Vector2i(floori(pos.x / TILE), floori(pos.y / TILE))
+	var rel := pos - MAP_OFFSET
+	if rel.x < 0 or rel.y < 0:
+		return Vector2i(-1, -1)
+	var cx := floori(rel.x / TILE)
+	var cy := floori(rel.y / TILE)
+	if cx < 0 or cx >= MAP_W or cy < 0 or cy >= MAP_H:
+		return Vector2i(-1, -1)
+	return Vector2i(cx, cy)
 
 ## ---------- 辅助 ----------
 func _camp_units(camp: String) -> Array:
@@ -303,43 +828,48 @@ func _blocked_cells(exclude: String = "") -> Array[Vector2i]:
 	return out
 
 func _sync_node(u) -> void:
-	var node: Node2D = unit_nodes[u.id]
+	var node: Node2D = unit_nodes.get(u.id)
 	if node:
 		node.position = _cell_to_px(u.cell)
 		_sync_text(u)
 
 ## 仅更新单位文本（血量/名字），不动位置（用于移动动画期间）
 func _sync_text(u) -> void:
-	var node: Node2D = unit_nodes[u.id]
+	var node: Node2D = unit_nodes.get(u.id)
 	if node:
-		# 臧霸占山状态随位置更新
 		if "king_hill" in u.skill_ids:
 			u.on_hill = _is_hill(u.cell)
-		var hp_lbl: Label = node.get_child(1)  # 名字
-		hp_lbl.text = "%s\n%d/%d" % [u.name, u.hp, u.max_hp]
+		_update_unit_visuals(u, node)
+	_update_dashboard()
 
 ## ---------- 输入 ----------
 func _unhandled_input(event: InputEvent) -> void:
 	if dialog_showing:
+		if event.is_action_pressed("ui_accept") or (event is InputEventKey and event.pressed and (event.keycode == KEY_SPACE or event.keycode == KEY_ENTER)):
+			_on_dialog_btn_pressed()
+			get_viewport().set_input_as_handled()
 		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var cell := _px_to_cell(get_global_mouse_position())
-		_handle_click(cell)
+		if cell != Vector2i(-1, -1):
+			_handle_click(cell)
 
 func _handle_click(cell: Vector2i) -> void:
 	match input_mode:
-		InputMode.SELECT:
+		InputMode.NONE, InputMode.SELECT:
 			var u: BattleUnitScript = _unit_at(cell)
-			if u and u.camp == "player" and u.alive and not u.acted:
-				# 点另一个未行动单位 → 重新选择
-				if u.id != selected_id:
+			if u:
+				if u.camp == "player" and u.alive and not u.acted:
 					_select_unit(u.id)
-			# 点空白/自己 → 保持命令菜单
+				else:
+					_inspect_unit(u.id)
+			else:
+				_cancel_input()
 		InputMode.MOVE:
 			if _is_in_reachable(cell):
 				_do_move(cell)
 			else:
-				_show_command_menu()  # 点无效处回到命令菜单
+				_show_command_menu()
 		InputMode.ATTACK:
 			if _is_in_attack_range(cell):
 				_do_attack(cell)
@@ -351,6 +881,20 @@ func _handle_click(cell: Vector2i) -> void:
 			else:
 				_show_command_menu()
 
+func _inspect_unit(id: String) -> void:
+	selected_id = id
+	_clear_overlay()
+	_clear_command_menu()
+	command_menu.visible = false
+	input_mode = InputMode.SELECT
+	_update_dashboard()
+	var u: BattleUnitScript = _unit_by_id(id)
+	if u:
+		if u.camp == "enemy":
+			info_label.text = "侦查敌情：【%s】HP %d/%d, 攻 %d, 防 %d" % [u.name, u.hp, u.max_hp, u.effective_atk(), u.effective_def()]
+		else:
+			info_label.text = "【%s】本回合已行动完毕。" % u.name
+
 func _unit_at(cell: Vector2i) -> BattleUnitScript:
 	for u in units:
 		if u.alive and u.cell == cell:
@@ -361,11 +905,15 @@ func _unit_at(cell: Vector2i) -> BattleUnitScript:
 func _select_unit(id: String) -> void:
 	selected_id = id
 	var u: BattleUnitScript = _unit_by_id(id)
+	if u == null or not u.alive:
+		_cancel_input()
+		return
 	_clear_overlay()
 	var blocked := _blocked_cells(id)
 	var reach := GridCore.reachable(u.cell, u.mov, MAP_W, MAP_H, blocked)
-	_draw_cells(reach.keys(), Color(0.3, 0.8, 0.3, 0.4))
+	_draw_cells(reach.keys(), Color(0.2, 0.8, 0.4, 0.35))
 	input_mode = InputMode.SELECT
+	_update_dashboard()
 	_show_command_menu()
 
 func _max_charge_for(u) -> int:
@@ -381,45 +929,96 @@ func _clear_command_menu() -> void:
 func _show_command_menu() -> void:
 	_clear_command_menu()
 	var u: BattleUnitScript = _unit_by_id(selected_id)
-	if u == null or not u.alive or dialog_showing:
+	if u == null or not u.alive or dialog_showing or u.camp != "player" or u.acted:
 		command_menu.visible = false
 		return
 	input_mode = InputMode.SELECT
 	command_menu.visible = true
 
-	# 移动
-	var label := Label.new()
-	label.text = "%s 行动" % u.name
-	label.add_theme_font_size_override("font_size", 16)
-	command_menu.add_child(label)
+	var title_lbl := Label.new()
+	title_lbl.text = "🎮 军令指示 · %s" % u.name
+	title_lbl.add_theme_font_size_override("font_size", 15)
+	title_lbl.add_theme_color_override("font_color", Color(0.95, 0.85, 0.5))
+	command_menu.add_child(title_lbl)
 
+	var row_grid := GridContainer.new()
+	row_grid.columns = 2
+	row_grid.add_theme_constant_override("h_separation", 10)
+	row_grid.add_theme_constant_override("v_separation", 8)
+	command_menu.add_child(row_grid)
+
+	# 1. 移动
 	var btn_move := Button.new()
-	btn_move.text = "移动（%d格）" % u.mov
+	btn_move.custom_minimum_size = Vector2(265, 42)
+	btn_move.text = "👟 战术移动 (%d格)" % u.mov
 	btn_move.pressed.connect(_cmd_move)
-	command_menu.add_child(btn_move)
+	row_grid.add_child(btn_move)
 
-	# 攻击（若可攻击范围内有敌人）
-	if _has_attackable_target(u):
-		var btn_atk := Button.new()
-		btn_atk.text = "攻击"
-		btn_atk.pressed.connect(_cmd_attack)
-		command_menu.add_child(btn_atk)
+	# 2. 攻击
+	var can_atk := _has_attackable_target(u)
+	var btn_atk := Button.new()
+	btn_atk.custom_minimum_size = Vector2(265, 42)
+	btn_atk.text = "⚔️ 普通攻击"
+	btn_atk.disabled = not can_atk
+	btn_atk.pressed.connect(_cmd_attack)
+	row_grid.add_child(btn_atk)
 
-	# 技能（若有技能就绪）
+	# 3. 技能
 	if u.skill_ids.size() > 0:
 		var skill_id: String = u.skill_ids[0]
 		var ready := u.skill_ready(skill_id)
+		var skill_name: String = SkillsCore.meta(skill_id).get("name", "绝技")
 		var btn_skill := Button.new()
-		btn_skill.text = "%s%s" % [SkillsCore.meta(skill_id).get("name", "技能"), "" if ready else "（CD中）"]
+		btn_skill.custom_minimum_size = Vector2(265, 42)
+		if skill_id == "dragon_slash":
+			btn_skill.text = "✨ %s (%d/10)" % [skill_name, u.charge]
+		else:
+			btn_skill.text = "✨ %s%s" % [skill_name, "" if ready else " (CD中)"]
 		btn_skill.disabled = not ready or not _has_skill_target(u, skill_id)
 		btn_skill.pressed.connect(_cmd_skill)
-		command_menu.add_child(btn_skill)
+		row_grid.add_child(btn_skill)
 
-	# 待机（蓄力武将：张飞蓄轮数；否则单纯跳过）
+	# 4. 待机/蓄力
 	var btn_wait := Button.new()
-	btn_wait.text = "待机/蓄力"
+	btn_wait.custom_minimum_size = Vector2(265, 42)
+	if "roar" in u.skill_ids:
+		btn_wait.text = "🛡️ 待机 / 蓄力 (%d/3)" % u.charge
+	else:
+		btn_wait.text = "🛡️ 待机休整"
 	btn_wait.pressed.connect(_cmd_wait)
-	command_menu.add_child(btn_wait)
+	row_grid.add_child(btn_wait)
+
+	# 5. 战术合体（赵云/关羽/刘备）
+	var mount_target := _find_mountable_target(u)
+	if mount_target != null:
+		var btn_mount := Button.new()
+		btn_mount.custom_minimum_size = Vector2(265, 42)
+		btn_mount.text = "🐎 战术合体 (骑乘%s)" % mount_target.name
+		btn_mount.pressed.connect(_cmd_mount.bind(mount_target))
+		row_grid.add_child(btn_mount)
+
+	# 6. 取消指令
+	var btn_cancel := Button.new()
+	btn_cancel.custom_minimum_size = Vector2(265, 42)
+	btn_cancel.text = "❌ 取消指令"
+	btn_cancel.pressed.connect(_cancel_input)
+	row_grid.add_child(btn_cancel)
+
+func _find_mountable_target(u) -> BattleUnitScript:
+	for other in units:
+		if other.alive and other.camp == u.camp and other.id != u.id:
+			if SkillsCore.can_mount(u, other):
+				return other
+	return null
+
+func _cmd_mount(target: BattleUnitScript) -> void:
+	var u: BattleUnitScript = _unit_by_id(selected_id)
+	if u and target:
+		SkillsCore.do_mount(u, target)
+		info_label.text = "【%s】与【%s】合体！化身全图疾驰战车！（移动力提升至 %d，奔跑蓄力效率翻倍！）" % [u.name, target.name, u.mov]
+		_sync_text(u)
+		_sync_text(target)
+		_show_command_menu()
 
 func _has_attackable_target(u) -> bool:
 	for t in units:
@@ -670,17 +1269,14 @@ func _apply_events(events: Array) -> void:
 					_show_win_dialog()
 
 func _flash_unit(id: String, color: Color) -> void:
-	var node: Node2D = unit_nodes[id]
-	if node and node.get_child_count() > 0:
-		var rect: ColorRect = node.get_child(0)
-		var orig := rect.color
-		rect.color = color
+	var node: Node2D = unit_nodes.get(id)
+	if node:
 		var tw := create_tween()
-		tw.tween_interval(0.15)
-		tw.tween_callback(func(): rect.color = orig)
+		tw.tween_property(node, "modulate", Color(2.5, 0.6, 0.6, 1.0), 0.12)
+		tw.tween_property(node, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.15)
 
 func _unit_node_hide(id: String) -> void:
-	var node: Node2D = unit_nodes[id]
+	var node: Node2D = unit_nodes.get(id)
 	if node:
 		node.visible = false
 
@@ -690,12 +1286,12 @@ func _spawn_float_text(cell: Vector2i, text: String, color: Color) -> void:
 	lbl.text = text
 	lbl.add_theme_color_override("font_color", color)
 	lbl.add_theme_font_size_override("font_size", 16)
-	lbl.position = _cell_to_px(cell) + Vector2(-20, -18)
+	lbl.position = _cell_to_px(cell) + Vector2(-28, -26)
 	lbl.z_index = 50
 	unit_root.add_child(lbl)
 	var tw := create_tween()
-	tw.tween_property(lbl, "position", lbl.position + Vector2(0, -22), 0.6)
-	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 0.6)
+	tw.tween_property(lbl, "position", lbl.position + Vector2(0, -26), 0.65)
+	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 0.65)
 	tw.tween_callback(lbl.queue_free)
 
 ## 技能大字横幅（居中弹一下消失）
@@ -705,24 +1301,24 @@ func _spawn_banner(text: String, color: Color) -> void:
 	lbl.add_theme_color_override("font_color", color)
 	lbl.add_theme_font_size_override("font_size", 30)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.position = Vector2(400, 240)
-	lbl.size = Vector2(480, 60)
+	lbl.position = Vector2(100, 260)
+	lbl.size = Vector2(1080, 60)
 	lbl.z_index = 60
 	var ui_layer = $UI
 	ui_layer.add_child(lbl)
 	var tw := create_tween()
 	var base := lbl.position
-	tw.tween_property(lbl, "position", base + Vector2(0, 12), 0.25)
+	tw.tween_property(lbl, "position", base + Vector2(0, 10), 0.25)
 	tw.tween_property(lbl, "modulate:a", 0.0, 0.8)
 	tw.tween_callback(lbl.queue_free)
 
 ## 简单技能范围特效（以某格为中心画圆圈/方块扩散）
 func _spawn_burst(cell: Vector2i, color: Color, radius_in_cells: int = 0) -> void:
 	var rect := ColorRect.new()
-	rect.size = Vector2(TILE - 4, TILE - 4)
-	rect.position = _cell_to_px(cell) + Vector2(2 - radius_in_cells * TILE, 2 - radius_in_cells * TILE)
-	if radius_in_cells > 0:
-		rect.size = Vector2(TILE * (radius_in_cells * 2 + 1) - 4, TILE * (radius_in_cells * 2 + 1) - 4)
+	var center := _cell_to_px(cell)
+	var sz: float = TILE * (radius_in_cells * 2 + 1) - 4.0
+	rect.size = Vector2(sz, sz)
+	rect.position = center - Vector2(sz / 2.0, sz / 2.0)
 	rect.color = color
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rect.z_index = 6
@@ -733,17 +1329,23 @@ func _spawn_burst(cell: Vector2i, color: Color, radius_in_cells: int = 0) -> voi
 
 ## ===== 战斗爽感特效（升级版） =====
 
-## 屏幕震动（用 MapRoot 轻微偏移，多次往返）
+## 屏幕震动（MapRoot、UnitRoot、Overlay 全体协同震荡）
 func _shake_camera(strength: float = 6.0) -> void:
 	var tw := create_tween()
-	var base := Vector2.ZERO
+	var base_map := map_root.position
+	var base_unit := unit_root.position
+	var base_overlay := overlay.position
 	for i in range(5):
 		var off := Vector2(
 			randf_range(-strength, strength),
 			randf_range(-strength, strength)
 		)
-		tw.tween_property(map_root, "position", base + off, 0.03)
-	tw.tween_property(map_root, "position", base, 0.04)
+		tw.tween_property(map_root, "position", base_map + off, 0.03)
+		tw.parallel().tween_property(unit_root, "position", base_unit + off, 0.03)
+		tw.parallel().tween_property(overlay, "position", base_overlay + off, 0.03)
+	tw.tween_property(map_root, "position", base_map, 0.04)
+	tw.parallel().tween_property(unit_root, "position", base_unit, 0.04)
+	tw.parallel().tween_property(overlay, "position", base_overlay, 0.04)
 
 ## 全屏闪光（短暂覆盖一层色，闪亮后隐去）
 func _screen_flash(color: Color, duration: float = 0.25) -> void:
@@ -758,41 +1360,75 @@ func _screen_flash(color: Color, duration: float = 0.25) -> void:
 	tw.tween_property(rect, "modulate:a", 0.0, duration)
 	tw.tween_callback(rect.queue_free)
 
-## 青龙横贯：从释放者格向目标格扫一条发光光带（拉长的三角形/渐变）
+## 千里·青龙横贯：多层碧霄龙刃辉光 + 爆破龙鳞 + 冲击新星
 func _spawn_dragon(from_cell: Vector2i, to_cell: Vector2i) -> void:
 	var start_px := _cell_to_px(from_cell)
 	var end_px := _cell_to_px(to_cell)
 	var dir := (end_px - start_px).normalized()
-	var len := start_px.distance_to(end_px)
-	# 用一串沿路径密集排列的渐隐方块构成光带
-	var seg_count := int(len / 12)
-	var tw := create_tween()
-	for i in range(seg_count):
-		var t := float(i) / float(max(seg_count, 1))
-		var pos := start_px + dir * len * t
-		var orb := Polygon2D.new()
-		orb.polygon = PackedVector2Array([
-			Vector2(-8, -14), Vector2(8, -14), Vector2(0, 14)
+	var dist := start_px.distance_to(end_px)
+
+	var beam_root := Node2D.new()
+	beam_root.z_index = 40
+	unit_root.add_child(beam_root)
+
+	# 1. 外层青龙破空气流（宽 44px）
+	var outer_line := Line2D.new()
+	outer_line.points = PackedVector2Array([start_px, end_px])
+	outer_line.width = 44.0
+	outer_line.default_color = Color(0.12, 0.85, 0.55, 0.35)
+	outer_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	outer_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	beam_root.add_child(outer_line)
+
+	# 2. 中层天青龙气巨柱（宽 22px）
+	var mid_line := Line2D.new()
+	mid_line.points = PackedVector2Array([start_px, end_px])
+	mid_line.width = 22.0
+	mid_line.default_color = Color(0.25, 1.0, 0.65, 0.85)
+	mid_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	mid_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	beam_root.add_child(mid_line)
+
+	# 3. 内层白炽贯穿核（宽 7px）
+	var core_line := Line2D.new()
+	core_line.points = PackedVector2Array([start_px, end_px])
+	core_line.width = 7.0
+	core_line.default_color = Color(0.95, 1.0, 0.95, 1.0)
+	core_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	core_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	beam_root.add_child(core_line)
+
+	# 4. 沿斩击路径排列的青龙刃鳞
+	var step_count := int(dist / 28.0)
+	for i in range(step_count):
+		var t := float(i) / float(max(step_count, 1))
+		var pos := start_px + dir * dist * t
+		var scale_poly := Polygon2D.new()
+		scale_poly.polygon = PackedVector2Array([
+			Vector2(-14, -8), Vector2(14, 0), Vector2(-14, 8), Vector2(-8, 0)
 		])
-		orb.position = pos
-		orb.rotation = dir.angle()
-		orb.color = Color(0.3, 1.0, 0.6, 0.9)
-		orb.z_index = 20
-		unit_root.add_child(orb)
-		tw.parallel().tween_property(orb, "scale", Vector2(1.4, 1.4), 0.2).set_trans(Tween.TRANS_QUAD)
-		tw.parallel().tween_property(orb, "modulate:a", 0.0, 0.3)
-		tw.tween_interval(0.012)
-	# 前头一个大光球
-	var head := Polygon2D.new()
-	head.polygon = PackedVector2Array([
-		Vector2(-16, -16), Vector2(16, -16), Vector2(16, 16), Vector2(-16, 16)
-	])
-	head.position = end_px
-	head.color = Color(0.6, 1.0, 0.8, 0.9)
-	head.z_index = 21
-	unit_root.add_child(head)
-	tw.parallel().tween_property(head, "scale", Vector2(2.2, 2.2), 0.25)
-	tw.parallel().tween_property(head, "modulate:a", 0.0, 0.3)
+		scale_poly.position = pos
+		scale_poly.rotation = dir.angle()
+		scale_poly.color = Color(0.4, 1.0, 0.75, 0.75)
+		beam_root.add_child(scale_poly)
+
+	# 5. 目标爆破新星
+	var nova := Polygon2D.new()
+	nova.polygon = _make_circle_polygon(38.0, 16)
+	nova.position = end_px
+	nova.color = Color(0.65, 1.0, 0.85, 0.9)
+	beam_root.add_child(nova)
+
+	# 6. 动画演播与渐隐
+	var tw := create_tween()
+	tw.parallel().tween_property(outer_line, "width", 68.0, 0.35)
+	tw.parallel().tween_property(mid_line, "width", 32.0, 0.35)
+	tw.parallel().tween_property(nova, "scale", Vector2(2.4, 2.4), 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(beam_root, "modulate:a", 0.0, 0.4).set_delay(0.12)
+	tw.tween_callback(beam_root.queue_free)
+
+	_shake_camera(12.0)
+	_screen_flash(Color(0.2, 1.0, 0.6, 0.35), 0.3)
 
 ## 音波圈：从中心扩散的多层圆环（咆哮/范围技）
 func _spawn_shockwave(cell: Vector2i, color: Color) -> void:
@@ -818,18 +1454,18 @@ func _make_circle_polygon(radius: float, segments: int = 20) -> PackedVector2Arr
 
 ## 单位受击弹跳（动作感）
 func _unit_bounce(id: String) -> void:
-	var node: Node2D = unit_nodes[id]
+	var node: Node2D = unit_nodes.get(id)
 	if node == null:
 		return
 	var tw := create_tween()
-	tw.tween_property(node, "scale", Vector2(1.2, 0.8), 0.06)
-	tw.tween_property(node, "scale", Vector2(1, 1), 0.12)
+	tw.tween_property(node, "scale", Vector2(1.25, 0.8), 0.06)
+	tw.tween_property(node, "scale", Vector2(1.0, 1.0), 0.12)
 
 ## 大招定格：全屏闪白 + 字幕口号 + 震动
 func _big_moment(text: String) -> void:
-	_screen_flash(Color(1, 1, 1, 0.5), 0.3)
+	_screen_flash(Color(1, 1, 0.9, 0.5), 0.35)
 	_spawn_banner(text, Color(1, 0.85, 0.3))
-	_shake_camera(8.0)
+	_shake_camera(10.0)
 
 ## ---------- 回合流转 ----------
 func _after_action(u) -> void:
@@ -990,7 +1626,7 @@ func _show_next_dialog_line() -> void:
 	var speaker: String = line.get("speaker", "")
 	var text: String = line.get("text", "")
 	dialog_text.text = "[b]%s[/b]\n%s" % [speaker, text]
-	dialog_btn.text = "继续 ▸"
+	dialog_btn.text = "继续 (Space/点击) ▸"
 
 func _on_dialog_btn_pressed() -> void:
 	if pending_dialog.size() > 0:
@@ -1001,6 +1637,13 @@ func _on_dialog_btn_pressed() -> void:
 		# 对话结束后：若是胜利对话，进入结算
 		if win_dialog_played:
 			_go_to_result()
+
+func _on_dialog_skip_pressed() -> void:
+	pending_dialog.clear()
+	dialog_showing = false
+	dialog_box.visible = false
+	if win_dialog_played:
+		_go_to_result()
 
 func _on_end_turn_pressed() -> void:
 	if dialog_showing:
@@ -1015,6 +1658,7 @@ func _cancel_input() -> void:
 	_clear_overlay()
 	command_menu.visible = false
 	_clear_command_menu()
+	_update_dashboard()
 
 func _clear_overlay() -> void:
 	for c in overlay.get_children():
@@ -1023,8 +1667,8 @@ func _clear_overlay() -> void:
 func _draw_cells(cells, color: Color) -> void:
 	for c in cells:
 		var rect := ColorRect.new()
-		rect.size = Vector2(TILE - 4, TILE - 4)
-		rect.position = Vector2(c.x * TILE + 2, c.y * TILE + 2)
+		rect.size = Vector2(TILE - 4.0, TILE - 4.0)
+		rect.position = MAP_OFFSET + Vector2(c.x * TILE + 2.0, c.y * TILE + 2.0)
 		rect.color = color
 		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		overlay.add_child(rect)
