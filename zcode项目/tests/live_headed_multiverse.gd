@@ -1,4 +1,4 @@
-﻿extends SceneTree
+extends SceneTree
 
 const BattleScript := preload("res://scripts/battle.gd")
 const SaveCore := preload("res://scripts/systems/save.gd")
@@ -114,26 +114,31 @@ func _run_multiverse_tour() -> void:
 		current_scene._cmd_mount(zhaoyun)
 	await _wait(1.2)
 
-	# 2. 关羽全速冲刺
+	# 2. 关羽全速冲锋
 	_set_hud("【战术实测·冲锋】", "关羽沿中路全速冲锋，拉满龙斩蓄力！", 24.0)
 	current_scene._do_move(Vector2i(7, 4))
 	await _wait(1.8)
 
-	# 3. 张飞蓄力怒吼
-	_set_hud("【战术实测·控场准备】", "张飞原地蓄力断桥怒吼，准备迎击暴怒吕布！", 30.0)
-	current_scene._select_unit("zhangfei")
-	await _wait(0.8)
-	current_scene._cmd_wait()
-	await _wait(1.0)
+	# 3. 步骑分离·空投连携突刺实机验证
+	_set_hud("【空投突袭·连携】", "关羽解除合体！赵云空投下马，触发【🗡️ 空投连携突刺】！", 28.0)
+	current_scene.selected_id = "guanyu"
+	current_scene._cmd_unmount()
+	await _wait(1.8)
 
-	# 4. 模拟吕布方天乱舞第1击
+	# 4. 敌方出手与我方防守反击
 	var lubu = current_scene._unit_by_id("lubu")
 	var zhangfei = current_scene._unit_by_id("zhangfei")
 	if lubu and zhangfei:
-		_set_hud("【Boss机制·方天乱舞】", "吕布发动方天乱舞第一击！连击数累积！", 36.0)
+		_set_hud("【Boss机制·方天乱舞】", "吕布发动方天乱舞第1击！张飞坚毅抗伤！", 33.0)
 		lubu.fangtian_strike()
 		current_scene._spawn_float_text(lubu.cell, "方天乱舞 1/3！越战越狂！", Color(1.0, 0.3, 0.2))
 		await _wait(1.2)
+
+		_set_hud("【硬核机制·阵地反击】", "张飞受击触发【⚡ 阵地反击】！还以丈八蛇矛一击！", 37.0)
+		current_scene._spawn_float_text(zhangfei.cell, "⚡ 阵地反击！", Color(0.4, 0.9, 1.0))
+		var counter_ev = SkillsCore.do_counter_attack(zhangfei, lubu)
+		current_scene._apply_events(counter_ev)
+		await _wait(1.5)
 
 	# 5. 张飞咆哮眩晕吕布！打断连击！
 	_set_hud("【硬核拆招·断桥怒吼】", "张飞施展【燕人咆哮】！音波震碎胆石，吕布被强制眩晕！连击重置！", 42.0)

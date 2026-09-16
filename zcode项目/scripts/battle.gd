@@ -534,12 +534,15 @@ func _update_dashboard() -> void:
 		dash_status_text.text += " · 💫 眩晕中"
 	if u.is_mounted():
 		dash_status_text.text += " · 🐎 骑乘合体"
+	if u.cell in hills:
+		dash_status_text.text += " · ⛰️ 高地优势(+30%)"
 
 	dash_hp_text.text = "生命值: %d / %d" % [u.hp, u.max_hp]
 	dash_hp_bar.value = float(u.hp) / float(max(u.max_hp, 1)) * 100.0
 
-	dash_stat_atk.text = "⚔️ 攻击力: %d" % u.effective_atk()
-	dash_stat_def.text = "🛡️ 防御力: %d" % u.effective_def()
+	var hill_tag := " (⛰️高地)" if u.cell in hills else ""
+	dash_stat_atk.text = "⚔️ 攻击力: %d%s" % [u.effective_atk(), hill_tag]
+	dash_stat_def.text = "🛡️ 防御力: %d%s" % [u.effective_def(), hill_tag]
 	dash_stat_mov.text = "👟 移动力: %d 格" % u.mov
 	dash_stat_rng.text = "🎯 射  程: %d 格" % u.rng
 
@@ -1010,7 +1013,23 @@ func _show_command_menu() -> void:
 			btn_mount.pressed.connect(_cmd_mount.bind(mount_target))
 			row_grid.add_child(btn_mount)
 
-	# 6. 取消指令
+	# 6. 背包军备神兵主动施放
+	var save := SaveCore.load_state()
+	var inv: Dictionary = save.get("inventory", {})
+	if int(inv.get("dahuangdan", 0)) > 0:
+		var btn_dan := Button.new()
+		btn_dan.custom_minimum_size = Vector2(265, 42)
+		btn_dan.text = "💊 传世大黄丹 (剩%d/回满血)" % int(inv["dahuangdan"])
+		btn_dan.pressed.connect(_cmd_use_dahuangdan)
+		row_grid.add_child(btn_dan)
+	if int(inv.get("dongfeng", 0)) > 0:
+		var btn_wind := Button.new()
+		btn_wind.custom_minimum_size = Vector2(265, 42)
+		btn_wind.text = "💨 借微缩东风 (剩%d/击退)" % int(inv["dongfeng"])
+		btn_wind.pressed.connect(_cmd_use_dongfeng)
+		row_grid.add_child(btn_wind)
+
+	# 7. 取消指令
 	var btn_cancel := Button.new()
 	btn_cancel.custom_minimum_size = Vector2(265, 42)
 	btn_cancel.text = "❌ 取消指令"
@@ -1047,16 +1066,71 @@ func _cmd_unmount() -> void:
 			var horse_node: Node2D = unit_nodes.get(horse.id)
 			if horse_node:
 				horse_node.visible = true
+			var found_cell: Vector2i = Vector2i(-1, -1)
 			for d in GridCore.DIRS4:
 				var adj := u.cell + d
 				if GridCore.in_bounds(adj, MAP_W, MAP_H) and adj not in _blocked_cells(""):
-					horse.cell = adj
+					found_cell = adj
 					break
+			# 极端阻挡保护：若周围4格受阻，扩大到切比雪夫半径2外圈寻找空格
+			if found_cell == Vector2i(-1, -1):
+				for c in GridCore.cells_in_radius(u.cell, 2, MAP_W, MAP_H):
+					if c != u.cell and c not in _blocked_cells(""):
+						found_cell = c
+						break
+			if found_cell != Vector2i(-1, -1):
+				horse.cell = found_cell
 			_sync_node(horse)
 			info_label.text = "【%s】与【%s】分离！重回各自独立作战！" % [u.name, horse.name]
+			# 空投连携突刺：若赵云落脚点与敌军相邻，立即发动突袭！
+			var enemy_target: BattleUnitScript = null
+			for t in units:
+				if t.alive and t.camp != horse.camp and GridCore.chebyshev(horse.cell, t.cell) <= 1:
+					enemy_target = t
+					break
+			if enemy_target:
+				_spawn_float_text(horse.cell, "🗡️ 空投连携突刺！", Color(0.3, 0.9, 1.0), true)
+				var dual_ev := SkillsCore.do_dismount_strike(horse, enemy_target)
+				_apply_events(dual_ev)
+				_unit_bounce(horse.id)
 			_sync_text(u)
 			_sync_text(horse)
 			_show_command_menu()
+
+func _cmd_use_dahuangdan() -> void:
+	var u: BattleUnitScript = _unit_by_id(selected_id)
+	if u and u.alive:
+		var save := SaveCore.load_state()
+		var inv: Dictionary = save.get("inventory", {})
+		if int(inv.get("dahuangdan", 0)) > 0:
+			inv["dahuangdan"] = int(inv["dahuangdan"]) - 1
+			save["inventory"] = inv
+			SaveCore.save_state(save)
+			var ev := SkillsCore.do_use_dahuangdan(u)
+			_apply_events(ev)
+			_spawn_burst(u.cell, Color(1.0, 0.85, 0.2), 3)
+			_spawn_float_text(u.cell, "💊 大黄丹金丹回天！HP回满！", Color(1.0, 0.85, 0.2), true)
+			info_label.text = "【%s】吞服传世大黄丹！气血瞬间全满！" % u.name
+			u.acted = true
+			_after_action(u)
+
+func _cmd_use_dongfeng() -> void:
+	var u: BattleUnitScript = _unit_by_id(selected_id)
+	if u and u.alive:
+		var save := SaveCore.load_state()
+		var inv: Dictionary = save.get("inventory", {})
+		if int(inv.get("dongfeng", 0)) > 0:
+			inv["dongfeng"] = int(inv["dongfeng"]) - 1
+			save["inventory"] = inv
+			SaveCore.save_state(save)
+			var ev := SkillsCore.do_use_dongfeng(u, units)
+			_apply_events(ev)
+			_spawn_shockwave(u.cell, Color(0.4, 0.9, 1.0))
+			_screen_flash(Color(0.6, 0.9, 1.0, 0.35), 0.2)
+			_spawn_float_text(u.cell, "💨 借东风狂飙！全场击退！", Color(0.4, 0.9, 1.0), true)
+			info_label.text = "【%s】祭起微缩版东风！狂风呼啸，周围敌军被震退！" % u.name
+			u.acted = true
+			_after_action(u)
 
 func _has_attackable_target(u) -> bool:
 	for t in units:
@@ -1174,6 +1248,12 @@ func _do_attack(cell: Vector2i) -> void:
 	_clear_overlay()
 	var events := SkillsCore.do_attack(u, t)
 	_apply_events(events)
+	# 敌方反击判定：若目标仍存活且未被眩晕，且攻击者在目标射程内，触发反击！
+	if t and t.alive and not t.is_stunned() and GridCore.chebyshev(t.cell, u.cell) <= t.rng:
+		_spawn_float_text(t.cell, "⚡ 阵地反击！", Color(1.0, 0.65, 0.2))
+		var counter_ev := SkillsCore.do_counter_attack(t, u)
+		_apply_events(counter_ev)
+		_unit_bounce(t.id)
 	u.acted = true
 	_after_action(u)
 
@@ -1213,6 +1293,7 @@ func _do_skill(cell: Vector2i) -> void:
 			# 满蓄力大招演出
 			if u.charge >= 10:
 				_big_moment("千里·青龙斩！！")
+				_spawn_float_text(u.cell, "这什么魔鬼伤害？！一刀带走！", Color(0.3, 1.0, 0.5), true)
 			else:
 				_spawn_banner("蓄力龙斩", Color(0.3, 0.9, 0.5))
 			if t:
@@ -1221,6 +1302,7 @@ func _do_skill(cell: Vector2i) -> void:
 			events = SkillsCore.do_dragon_slash(u, t)
 		"roar":
 			_spawn_banner("燕人咆哮！", Color(0.9, 0.7, 0.2))
+			_spawn_float_text(u.cell, "这一嗓子，你忍一下！", Color(1.0, 0.85, 0.2), true)
 			_spawn_shockwave(u.cell, Color(0.9, 0.7, 0.2, 0.5))
 			_spawn_burst(u.cell, Color(0.9, 0.7, 0.2, 0.4), 2)
 			_shake_camera(4.0)
@@ -1231,6 +1313,7 @@ func _do_skill(cell: Vector2i) -> void:
 			events = SkillsCore.do_roar(u, targets)
 		"seven_dash":
 			var weaves: int = mini(7, maxi(1, GridCore.manhattan(u.cell, t.cell) + 1))
+			_spawn_float_text(u.cell, "七进七出！子龙又穿过去啦！", Color(0.4, 0.9, 1.0))
 			if t:
 				_big_moment("常山·七进七出！！")
 				_spawn_seven_dash(u.cell, t.cell, weaves)
@@ -1713,6 +1796,17 @@ func _ai_attack(u, target) -> void:
 		_apply_events(SkillsCore.do_lubu_attack(u, target))
 	else:
 		_apply_events(SkillsCore.do_attack(u, target))
+
+	# 我方防守反击与被击反应
+	if target.alive and not target.is_stunned():
+		if target.id == "liubei":
+			_spawn_float_text(target.cell, "别打脸！我全靠长相混饭吃！", Color(1.0, 0.45, 0.45))
+		if GridCore.chebyshev(target.cell, u.cell) <= target.rng:
+			_spawn_float_text(target.cell, "⚡ 阵地反击！", Color(0.4, 0.9, 1.0))
+			var counter_ev := SkillsCore.do_counter_attack(target, u)
+			_apply_events(counter_ev)
+			_unit_bounce(target.id)
+
 	if not target.alive:
 		_check_defeat()
 

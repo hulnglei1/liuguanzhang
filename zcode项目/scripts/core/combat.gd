@@ -7,6 +7,11 @@ static func damage(atk: int, multiplier: float, def: int) -> int:
 	var dmg := int(round(atk * multiplier)) - def
 	return max(dmg, 1)
 
+## 反击伤害：ATK × 0.7 − 敌 DEF，保底 1
+static func counter_damage(atk: int, def: int) -> int:
+	var dmg := int(round(float(atk) * 0.7)) - def
+	return max(dmg, 1)
+
 ## 关羽【蓄力龙斩】：移动格数 = 蓄力值，倍率 = 0.5 + 0.3 × 格数（上限 10 格 = 3.5 倍）
 static func dragon_charge_multiplier(charge_cells: int) -> float:
 	var c: int = clampi(charge_cells, 0, 10)

@@ -143,16 +143,14 @@ func _build_menu() -> void:
 	nav_panel.add_child(btn_gallery)
 
 	# 右侧声望与通关信息
-	var p: int = int(save.get("prestige", 0))
-	var cleared_chapters: Array = save.get("chapters", [])
 	label_status = Label.new()
-	label_status.text = "🎖️ 军功声望: %d   |   🏆 通关进度: %d/4 关" % [p, cleared_chapters.size()]
+	label_status.text = _format_status_text()
 	label_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	label_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label_status.add_theme_font_size_override("font_size", 15)
+	label_status.add_theme_font_size_override("font_size", 14)
 	label_status.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	label_status.position = Vector2(620, 12)
-	label_status.size = Vector2(560, 30)
+	label_status.position = Vector2(610, 12)
+	label_status.size = Vector2(570, 30)
 	nav_panel.add_child(label_status)
 
 	# 3. 四大章节战役卡片 (2行 x 2列，每张卡片 580 x 230)
@@ -297,11 +295,24 @@ func _on_sweep(id: String, ch_title: String) -> void:
 	_refresh_status_bar()
 	_show_sweep_modal(ch_title, loot_name)
 
-func _refresh_status_bar() -> void:
+func _format_status_text() -> String:
 	var p: int = int(save.get("prestige", 0))
 	var cleared_chapters: Array = save.get("chapters", [])
+	var inv: Dictionary = save.get("inventory", {})
+	var items_summary: Array = []
+	if int(inv.get("corn", 0)) > 0: items_summary.append("🌽x%d" % inv["corn"])
+	if int(inv.get("potato", 0)) > 0: items_summary.append("🥔x%d" % inv["potato"])
+	if int(inv.get("sweet_potato", 0)) > 0: items_summary.append("🍠x%d" % inv["sweet_potato"])
+	if int(inv.get("bracer", 0)) > 0: items_summary.append("🛡️x%d" % inv["bracer"])
+	if int(inv.get("amulet", 0)) > 0: items_summary.append("📿x%d" % inv["amulet"])
+	if int(inv.get("dahuangdan", 0)) > 0: items_summary.append("💊x%d" % inv["dahuangdan"])
+	if int(inv.get("dongfeng", 0)) > 0: items_summary.append("💨x%d" % inv["dongfeng"])
+	var stash_str: String = "  |  🎒 行囊: %s" % (" ".join(items_summary) if items_summary.size() > 0 else "空")
+	return "🎖️ 声望: %d   |   🏆 通关: %d/4%s" % [p, cleared_chapters.size(), stash_str]
+
+func _refresh_status_bar() -> void:
 	if label_status:
-		label_status.text = "🎖️ 军功声望: %d   |   🏆 通关进度: %d/4 关" % [p, cleared_chapters.size()]
+		label_status.text = _format_status_text()
 
 func _show_sweep_modal(ch_title: String, loot_name: String) -> void:
 	var modal := Panel.new()

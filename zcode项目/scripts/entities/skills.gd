@@ -220,3 +220,56 @@ static func do_naked_strike(caster, target) -> Array:
 	if not target.alive:
 		ev.append({"type": "death", "target": target.id})
 	return ev
+
+## 结算受击反击（被攻击方且在射程内、未被眩晕、依然存活）
+static func do_counter_attack(defender, attacker) -> Array:
+	if not defender.alive or defender.is_stunned():
+		return []
+	var dmg: int = CombatCore.counter_damage(defender.effective_atk(), attacker.effective_def())
+	attacker.take_damage(dmg)
+	var ev: Array = [
+		{"type": "counter", "caster": defender.id, "target": attacker.id, "value": dmg},
+		CombatCore.make_damage_event(attacker.id, dmg, false)
+	]
+	if not attacker.alive:
+		ev.append({"type": "death", "target": attacker.id})
+	return ev
+
+## 步骑分离时赵云的空投连携突刺
+static func do_dismount_strike(zhaoyun, target) -> Array:
+	if not zhaoyun.alive or not target.alive:
+		return []
+	var dmg: int = CombatCore.damage(zhaoyun.effective_atk(), 0.5, target.effective_def())
+	target.take_damage(dmg)
+	var ev: Array = [
+		{"type": "dual_strike", "caster": zhaoyun.id, "target": target.id, "value": dmg},
+		CombatCore.make_damage_event(target.id, dmg, false)
+	]
+	if not target.alive:
+		ev.append({"type": "death", "target": target.id})
+	return ev
+
+## 传世大黄丹：恢复 100% 生命
+static func do_use_dahuangdan(target) -> Array:
+	if not target.alive:
+		return []
+	var heal: int = target.max_hp - target.hp
+	target.hp = target.max_hp
+	return [
+		{"type": "item_use", "item": "dahuangdan", "target": target.id, "value": heal},
+		{"type": "heal", "target": target.id, "value": heal}
+	]
+
+## 微缩版东风：周围半径2格所有敌军受到 25 点狂风伤害并被震退 1 格
+static func do_use_dongfeng(caster, all_units: Array) -> Array:
+	var ev: Array = [{"type": "item_use", "item": "dongfeng", "caster": caster.id}]
+	for u in all_units:
+		if u.alive and u.camp != caster.camp and GridCore.chebyshev(u.cell, caster.cell) <= 2:
+			var dmg: int = 25
+			u.take_damage(dmg)
+			ev.append({"type": "damage", "target": u.id, "value": dmg, "crit": false})
+			ev.append({"type": "knockback", "target": u.id, "cells": 1})
+			if not u.alive:
+				ev.append({"type": "death", "target": u.id})
+	return ev
+
