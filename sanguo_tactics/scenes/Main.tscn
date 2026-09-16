@@ -1,0 +1,353 @@
+[gd_scene load_steps=8 format=3 uid="uid://cxmainscene01"]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/grid_manager.gd" id="2_grid"]
+[ext_resource type="Script" path="res://scripts/unit_manager.gd" id="3_unit"]
+[ext_resource type="Script" path="res://scripts/fx_manager.gd" id="4_fx"]
+[ext_resource type="Script" path="res://scripts/skill_manager.gd" id="5_skill"]
+[ext_resource type="Script" path="res://scripts/turn_manager.gd" id="6_turn"]
+[ext_resource type="Script" path="res://scripts/ui_manager.gd" id="7_ui"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+anchor_mode = 0
+
+[node name="GridManager" type="Node2D" parent="."]
+script = ExtResource("2_grid")
+
+[node name="UnitManager" type="Node2D" parent="."]
+script = ExtResource("3_unit")
+
+[node name="FXManager" type="Node2D" parent="."]
+script = ExtResource("4_fx")
+
+[node name="SkillManager" type="Node" parent="."]
+script = ExtResource("5_skill")
+
+[node name="TurnManager" type="Node" parent="."]
+script = ExtResource("6_turn")
+
+[node name="UILayer" type="CanvasLayer" parent="."]
+script = ExtResource("7_ui")
+
+[node name="BarrageContainer" type="Control" parent="UILayer"]
+unique_name_in_owner = true
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="HUD" type="Control" parent="UILayer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TurnPanel" type="PanelContainer" parent="UILayer/HUD"]
+layout_mode = 0
+offset_left = 80.0
+offset_top = 8.0
+offset_right = 1104.0
+offset_bottom = 44.0
+
+[node name="HBox" type="HBoxContainer" parent="UILayer/HUD/TurnPanel"]
+layout_mode = 2
+
+[node name="TurnLabel" type="Label" parent="UILayer/HUD/TurnPanel/HBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 15
+text = "【第 1 回合】蜀汉战术阶段"
+vertical_alignment = 1
+
+[node name="EndTurnBtn" type="Button" parent="UILayer/HUD/TurnPanel/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 30)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "结束本回合 ❯"
+
+[node name="UnitInfoPanel" type="PanelContainer" parent="UILayer/HUD"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 80.0
+offset_top = 545.0
+offset_right = 460.0
+offset_bottom = 705.0
+
+[node name="VBox" type="VBoxContainer" parent="UILayer/HUD/UnitInfoPanel"]
+layout_mode = 2
+
+[node name="HeaderHBox" type="HBoxContainer" parent="UILayer/HUD/UnitInfoPanel/VBox"]
+layout_mode = 2
+
+[node name="InfoAvatar" type="Label" parent="UILayer/HUD/UnitInfoPanel/VBox/HeaderHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(36, 36)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "关"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="NameVBox" type="VBoxContainer" parent="UILayer/HUD/UnitInfoPanel/VBox/HeaderHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="InfoName" type="Label" parent="UILayer/HUD/UnitInfoPanel/VBox/HeaderHBox/NameVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "关羽"
+
+[node name="InfoTitle" type="Label" parent="UILayer/HUD/UnitInfoPanel/VBox/HeaderHBox/NameVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
+theme_override_font_sizes/font_size = 11
+text = "汉寿亭侯/核武发射器"
+
+[node name="InfoHpBar" type="ProgressBar" parent="UILayer/HUD/UnitInfoPanel/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+max_value = 450.0
+value = 450.0
+show_percentage = false
+
+[node name="InfoHpText" type="Label" parent="UILayer/HUD/UnitInfoPanel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "HP: 450/450"
+
+[node name="InfoSpecialBox" type="VBoxContainer" parent="UILayer/HUD/UnitInfoPanel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="InfoSpecialLabel" type="Label" parent="UILayer/HUD/UnitInfoPanel/VBox/InfoSpecialBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "战马体力:"
+
+[node name="InfoSpecialBar" type="ProgressBar" parent="UILayer/HUD/UnitInfoPanel/VBox/InfoSpecialBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="DragonBox" type="VBoxContainer" parent="UILayer/HUD/UnitInfoPanel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="DragonChargeBar" type="ProgressBar" parent="UILayer/HUD/UnitInfoPanel/VBox/DragonBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+max_value = 10.0
+step = 1.0
+show_percentage = false
+
+[node name="DragonChargeDesc" type="Label" parent="UILayer/HUD/UnitInfoPanel/VBox/DragonBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 1, 0.5, 1)
+theme_override_font_sizes/font_size = 11
+text = "蓄力: 0/10 (竹叶青)"
+
+[node name="ActionMenu" type="PanelContainer" parent="UILayer/HUD"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 1115.0
+offset_top = 80.0
+offset_right = 1270.0
+offset_bottom = 520.0
+
+[node name="VBox" type="VBoxContainer" parent="UILayer/HUD/ActionMenu"]
+layout_mode = 2
+
+[node name="MenuTitle" type="Label" parent="UILayer/HUD/ActionMenu/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "【武将指令】"
+horizontal_alignment = 1
+
+[node name="BtnAttack" type="Button" parent="UILayer/HUD/ActionMenu/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "⚔️ 普通攻击"
+
+[node name="BtnDragon" type="Button" parent="UILayer/HUD/ActionMenu/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 1, 0.5, 1)
+theme_override_font_sizes/font_size = 12
+text = "🐉 千里青龙斩"
+
+[node name="BtnPie" type="Button" parent="UILayer/HUD/ActionMenu/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 12
+text = "🐴 给马哥画饼"
+
+[node name="BtnStepBack" type="Button" parent="UILayer/HUD/ActionMenu/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "🔙 再退一米"
+
+[node name="BtnRoar" type="Button" parent="UILayer/HUD/ActionMenu/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 0.7, 1, 1)
+theme_override_font_sizes/font_size = 12
+text = "📢 燕人咆哮"
+
+[node name="BtnTaunt" type="Button" parent="UILayer/HUD/ActionMenu/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "🛡️ 挑衅肉盾"
+
+[node name="BtnHeal" type="Button" parent="UILayer/HUD/ActionMenu/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 1, 0.4, 1)
+theme_override_font_sizes/font_size = 12
+text = "🩹 医学生急救"
+
+[node name="BtnRide" type="Button" parent="UILayer/HUD/ActionMenu/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.2, 1, 0.9, 1)
+theme_override_font_sizes/font_size = 12
+text = "🚀 合体骑乘"
+
+[node name="BtnWait" type="Button" parent="UILayer/HUD/ActionMenu/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "⏸️ 原地待命"
+
+[node name="DialogBox" type="PanelContainer" parent="UILayer"]
+unique_name_in_owner = true
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -440.0
+offset_top = -160.0
+offset_right = 440.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="HBox" type="HBoxContainer" parent="UILayer/DialogBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="SpeakerAvatar" type="Label" parent="UILayer/DialogBox/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 80)
+layout_mode = 2
+theme_override_font_sizes/font_size = 40
+text = "华"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ContentVBox" type="VBoxContainer" parent="UILayer/DialogBox/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SpeakerName" type="Label" parent="UILayer/DialogBox/HBox/ContentVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 16
+text = "人物名字"
+
+[node name="DialogText" type="Label" parent="UILayer/DialogBox/HBox/ContentVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "剧情对话内容..."
+autowrap_mode = 3
+
+[node name="HintLabel" type="Label" parent="UILayer/DialogBox/HBox/ContentVBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_font_sizes/font_size = 10
+text = "【点击任意处继续 ▶】"
+horizontal_alignment = 2
+
+[node name="GachaPanel" type="PanelContainer" parent="UILayer"]
+unique_name_in_owner = true
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -400.0
+offset_top = -220.0
+offset_right = 400.0
+offset_bottom = 220.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="UILayer/GachaPanel"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="GachaTitle" type="Label" parent="UILayer/GachaPanel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 22
+text = "🎉 汜水关大捷！斩杀华雄，诸侯震恐！"
+horizontal_alignment = 1
+
+[node name="GachaSub" type="Label" parent="UILayer/GachaPanel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 0.9, 0.6, 1)
+theme_override_font_sizes/font_size = 14
+text = "占领徐州东海郡，声望 +1000！抽取现代军工/跨次元物资！"
+horizontal_alignment = 1
+
+[node name="GachaDrawBtn" type="Button" parent="UILayer/GachaPanel/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 16
+text = "🎁 开启霸业战略盲盒"
+
+[node name="GachaResultBox" type="HBoxContainer" parent="UILayer/GachaPanel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="GachaFinishBtn" type="Button" parent="UILayer/GachaPanel/VBox"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(240, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 15
+text = "👑 收下物资，再战汜水关！"

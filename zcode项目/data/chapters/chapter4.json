@@ -1,0 +1,44 @@
+{
+  "id": "chapter4",
+  "title": "第四关 · 亲征泰山郡",
+  "prev_chapter": "chapter3",
+  "map": {
+    "w": 12,
+    "h": 10,
+    "obstacles": [
+      {"x": 4, "y": 2},
+      {"x": 5, "y": 7},
+      {"x": 8, "y": 1}
+    ],
+    "hills": [
+      {"x": 7, "y": 3},
+      {"x": 8, "y": 3},
+      {"x": 9, "y": 3},
+      {"x": 8, "y": 4},
+      {"x": 9, "y": 4},
+      {"x": 10, "y": 4}
+    ]
+  },
+  "player_spawn": [
+    {"unit": "liubei", "x": 1, "y": 4},
+    {"unit": "guanyu", "x": 2, "y": 5},
+    {"unit": "zhangfei", "x": 1, "y": 6},
+    {"unit": "zhaoyun", "x": 2, "y": 3},
+    {"unit": "xuchu", "x": 0, "y": 5, "camp": "player"},
+    {"unit": "gongsunzan", "x": 0, "y": 4}
+  ],
+  "enemy_spawn": [
+    {"unit": "zangba", "x": 9, "y": 3},
+    {"unit": "changxi", "x": 8, "y": 4},
+    {"unit": "taishan_1", "x": 9, "y": 5},
+    {"unit": "taishan_2", "x": 7, "y": 2},
+    {"unit": "taishan_3", "x": 10, "y": 6}
+  ],
+  "morale": {"player": 100, "enemy": 100},
+  "win_condition": "kill_commander",
+  "lose_condition": "player_all_dead",
+  "events": [
+    {"turn": 1, "type": "dialog", "key": "chapter4_open", "once": true},
+    {"turn": 3, "type": "dialog", "key": "chapter4_hill", "once": true}
+  ]
+}

@@ -1,0 +1,5 @@
+[gd_resource type="SystemFont" format=3 uid="uid://cfontdefault01"]
+
+[resource]
+font_names = PackedStringArray("Microsoft YaHei", "SimHei", "SimSun", "sans-serif")
+subpixel_positioning = 1

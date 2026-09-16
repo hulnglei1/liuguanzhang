@@ -1,0 +1,33 @@
+{
+  "warriors": [
+    {"id": "liubei", "name": "刘备", "desc": "霸业系统持有者，『我除了长得帅，一无是处』"},
+    {"id": "guanyu", "name": "关羽", "desc": "蓄力龙斩，冲刺越远越强，『逃兵』名场面"},
+    {"id": "zhangfei", "name": "张飞", "desc": "燕人咆哮，一口震穿耳膜"},
+    {"id": "zhaoyun", "name": "赵云", "desc": "七进七出，冲阵万军取首"},
+    {"id": "huaxiong", "name": "华雄", "desc": "虎牢狂力，曾被满蓄力青龙一刀秒"},
+    {"id": "lubu", "name": "吕布", "desc": "方天乱舞，『赤兔快跑！』"},
+    {"id": "xuchu", "name": "许褚", "desc": "裸衣死战，爆甲吸血双倍攻速"},
+    {"id": "zangba", "name": "臧霸", "desc": "占山为王，泰山贼首"},
+    {"id": "changxi", "name": "昌豨", "desc": "落草郡守，怯战易溃"},
+    {"id": "wuanguo", "name": "武安国", "desc": "三倍巨力，孔融部将，送菜名场面"},
+    {"id": "gongsunzan", "name": "公孙瓒", "desc": "拐弯箭雨，白马义从"},
+    {"id": "caocao", "name": "曹操", "desc": "钞能力玩家，『这还不阴？』"}
+  ],
+  "skills": [
+    {"id": "dragon_slash", "name": "蓄力龙斩", "desc": "关羽：移动格数=威力，满蓄力全屏青龙"},
+    {"id": "roar", "name": "断桥怒吼", "desc": "张飞：蓄力轮数=威力，满蓄力眩晕"},
+    {"id": "seven_dash", "name": "七进七出", "desc": "赵云：穿人多段突刺"},
+    {"id": "hua_rage", "name": "虎牢狂力", "desc": "华雄：每回合ATK+15%"},
+    {"id": "lubu_fangtian", "name": "方天乱舞", "desc": "吕布：第3击翻3倍"},
+    {"id": "naked_armor", "name": "裸衣死战", "desc": "许褚：爆甲减防+吸血+双倍攻速"},
+    {"id": "king_hill", "name": "占山为王", "desc": "臧霸：高地攻防+30%"},
+    {"id": "arrow_rain", "name": "拐弯箭雨", "desc": "公孙瓒：范围箭雨"}
+  ],
+  "scenes": [
+    {"id": "wenjiu_huaxiong", "name": "温酒斩华雄", "desc": "关羽绕场蓄力，一刀秒掉14倍华雄"},
+    {"id": "sanying_lubu", "name": "三英战吕布", "desc": "张飞吼住，四人集火斩杀吕布"},
+    {"id": "naked_battle", "name": "裤衩子人大战", "desc": "许褚裸衣，方圆百米只剩裤衩子"},
+    {"id": "qinzheng_taishan", "name": "亲征泰山", "desc": "破臧霸占山之王，平东海贼寇"},
+    {"id": "chitu_kaopao", "name": "赤兔快跑", "desc": "吕布见刘关张，心胆俱裂"}
+  ]
+}

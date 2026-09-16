@@ -1,0 +1,35 @@
+{
+  "id": "chapter3",
+  "title": "第三关 · 裸衣·裤衩子大战",
+  "prev_chapter": "chapter2",
+  "map": {
+    "w": 12,
+    "h": 10,
+    "obstacles": [
+      {"x": 4, "y": 2},
+      {"x": 5, "y": 7},
+      {"x": 7, "y": 4},
+      {"x": 8, "y": 7}
+    ]
+  },
+  "player_spawn": [
+    {"unit": "liubei", "x": 1, "y": 4},
+    {"unit": "guanyu", "x": 2, "y": 5},
+    {"unit": "zhangfei", "x": 1, "y": 6},
+    {"unit": "zhaoyun", "x": 2, "y": 3},
+    {"unit": "gongsunzan", "x": 0, "y": 5}
+  ],
+  "enemy_spawn": [
+    {"unit": "xuchu", "x": 10, "y": 4},
+    {"unit": "luan_bing_1", "x": 9, "y": 3},
+    {"unit": "luan_bing_2", "x": 9, "y": 5},
+    {"unit": "luan_bing_3", "x": 10, "y": 2}
+  ],
+  "morale": {"player": 100, "enemy": 100},
+  "win_condition": "kill_commander",
+  "lose_condition": "player_all_dead",
+  "events": [
+    {"turn": 1, "type": "dialog", "key": "chapter3_open", "once": true},
+    {"turn": 3, "type": "dialog", "key": "chapter3_naked", "once": true}
+  ]
+}

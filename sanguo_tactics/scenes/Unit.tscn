@@ -1,0 +1,40 @@
+[gd_scene load_steps=2 format=3 uid="uid://c8unit01m4v"]
+
+[ext_resource type="Script" path="res://scripts/unit.gd" id="1_unit"]
+
+[node name="Unit" type="Node2D"]
+script = ExtResource("1_unit")
+
+[node name="AvatarLabel" type="Label" parent="."]
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+theme_override_font_sizes/font_size = 20
+text = "将"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="NameLabel" type="Label" parent="."]
+offset_left = -40.0
+offset_top = -42.0
+offset_right = 40.0
+offset_bottom = -22.0
+theme_override_font_sizes/font_size = 12
+text = "武将"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="."]
+visible = false
+offset_left = -60.0
+offset_top = -62.0
+offset_right = 60.0
+offset_bottom = -42.0
+theme_override_colors/font_color = Color(1, 0.9, 0.2, 1)
+theme_override_font_sizes/font_size = 11
+text = "状态"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="FloatingContainer" type="Node2D" parent="."]

@@ -1,0 +1,26 @@
+; Engine configuration file.
+; Godot 4.x project file — 《魂穿刘关张》战棋
+; 双击此文件所在目录（含 project.godot）用 Godot 4.7+ 打开
+
+config_version=5
+
+[application]
+
+config/name="魂穿刘关张 · 战棋"
+config/description="曹操传式战棋：魂穿刘关张，把武将技组合出花"
+config/version="0.1.0-M0"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.7")
+config/icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
