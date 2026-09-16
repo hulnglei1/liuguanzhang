@@ -310,10 +310,15 @@ func _on_seed() -> void:
 		label_result.text = "【🌿 神农赐福！】获得：%s\n%s\n（现已持有 ×%d）" % [
 			draw.item.get("name", ""), draw.item.get("desc", ""), inv_cnt
 		]
+		label_result.add_theme_color_override("font_color", Color(0.4, 1.0, 0.6))
 		_celebration(Color(0.4, 0.9, 0.5, 0.4))
 	else:
 		label_result.text = "❌ " + str(draw.get("reason", "抽奖失败"))
+		label_result.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
 	_refresh()
+
+func _on_draw_seed() -> void:
+	_on_seed()
 
 func _on_weapon() -> void:
 	var p: int = int(save.get("prestige", 0))
@@ -325,11 +330,16 @@ func _on_weapon() -> void:
 		label_result.text = "【⚔️ 宝库出世！】获得：%s\n%s\n（现已持有 ×%d）" % [
 			draw.item.get("name", ""), draw.item.get("desc", ""), inv_cnt
 		]
+		label_result.add_theme_color_override("font_color", Color(1.0, 0.88, 0.35))
 		_celebration(Color(1.0, 0.4, 0.3, 0.45))
 		_celebration_shake()
 	else:
 		label_result.text = "❌ " + str(draw.get("reason", "抽奖失败"))
+		label_result.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
 	_refresh()
+
+func _on_draw_weapon() -> void:
+	_on_weapon()
 
 ## 抽中金光演出：全屏光芒 + 结果弹跳
 func _celebration(glow_color: Color) -> void:

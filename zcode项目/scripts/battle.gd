@@ -52,6 +52,7 @@ var dash_primary_obj: Label
 var dash_secondary_obj: Label
 var dash_player_count: Label
 var dash_enemy_count: Label
+var dash_tips_content: Label
 
 var dash_avatar_plate: Polygon2D
 var dash_avatar_text: Label
@@ -100,12 +101,23 @@ func _ready() -> void:
 	_apply_gear_bonuses()
 	_init_environment()
 	_ready_init_title()
+	_update_chapter_objectives()
+	_update_dashboard()
 	# 初次游玩教学 + 帮助按钮
 	if not _has_cleared_any_chapter():
 		_show_tutorial()
 	help_btn.pressed.connect(_show_help)
 	_show_open_dialog()
 	_update_hud()
+
+## 控制对话框与底栏互斥显隐（避免重叠覆盖）
+func _set_dialog_visible(is_vis: bool) -> void:
+	dialog_showing = is_vis
+	if dialog_box:
+		dialog_box.visible = is_vis
+	var bp = $UI/BottomPanel
+	if bp:
+		bp.visible = not is_vis
 
 ## 是否已通关过任意关（新人判断）
 func _has_cleared_any_chapter() -> bool:
@@ -122,8 +134,7 @@ func _show_tutorial() -> void:
 		{"speaker": "教学", "text": "拖太久敌人会变强！想赢=张飞咆哮控住 + 关羽满蓄力斩。"},
 	]
 	pending_dialog = t
-	dialog_showing = true
-	dialog_box.visible = true
+	_set_dialog_visible(true)
 	_show_next_dialog_line()
 
 ## 帮助说明（常驻「?」按钮）
@@ -135,8 +146,7 @@ func _show_help() -> void:
 		{"speaker": "教学", "text": "【胜利】击杀敌方主将即过关，占郡得声望，回主城抽奖/看图鉴"},
 	]
 	pending_dialog = help
-	dialog_showing = true
-	dialog_box.visible = true
+	_set_dialog_visible(true)
 	_show_next_dialog_line()
 
 ## P0-1：读取背包装备/种子，应用到全局战斗加成（让抽奖真正生效）
@@ -360,6 +370,7 @@ func _init_dashboard() -> void:
 	tips_content.add_theme_font_size_override("font_size", 13)
 	tips_content.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
 	tips_box.add_child(tips_content)
+	dash_tips_content = tips_content
 
 	var prompt_lbl := Label.new()
 	prompt_lbl.text = "👉 点击左侧战场上的任意武将，下达军令或查看属性"
@@ -373,124 +384,141 @@ func _init_dashboard() -> void:
 	dash_unit_view.visible = false
 	main_vbox.add_child(dash_unit_view)
 
-	var header_row := HBoxContainer.new()
-	header_row.add_theme_constant_override("separation", 12)
-	dash_unit_view.add_child(header_row)
+	# 1. 头像徽章与姓名身份横排
+	var avatar_row := HBoxContainer.new()
+	avatar_row.add_theme_constant_override("separation", 14)
+	dash_unit_view.add_child(avatar_row)
 
-	var avatar_ctrl := Control.new()
-	avatar_ctrl.custom_minimum_size = Vector2(48, 48)
-	header_row.add_child(avatar_ctrl)
+	var plate_root := Control.new()
+	plate_root.custom_minimum_size = Vector2(46, 46)
+	avatar_row.add_child(plate_root)
 
 	dash_avatar_plate = Polygon2D.new()
-	dash_avatar_plate.polygon = _make_circle_polygon(22.0, 16)
-	dash_avatar_plate.position = Vector2(24, 24)
-	dash_avatar_plate.color = Color(0.2, 0.5, 0.3)
-	avatar_ctrl.add_child(dash_avatar_plate)
+	dash_avatar_plate.polygon = _make_circle_polygon(22, 16)
+	dash_avatar_plate.position = Vector2(23, 23)
+	plate_root.add_child(dash_avatar_plate)
 
 	dash_avatar_text = Label.new()
-	dash_avatar_text.text = "关"
-	dash_avatar_text.position = Vector2(4, 4)
-	dash_avatar_text.size = Vector2(40, 40)
+	dash_avatar_text.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dash_avatar_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dash_avatar_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	dash_avatar_text.add_theme_font_size_override("font_size", 20)
-	dash_avatar_text.add_theme_color_override("font_color", Color(1, 1, 1))
-	avatar_ctrl.add_child(dash_avatar_text)
+	dash_avatar_text.add_theme_font_size_override("font_size", 16)
+	dash_avatar_text.add_theme_color_override("font_color", Color(1, 0.98, 0.92))
+	plate_root.add_child(dash_avatar_text)
 
-	var name_box := VBoxContainer.new()
-	name_box.add_theme_constant_override("separation", 2)
-	header_row.add_child(name_box)
+	var title_box := VBoxContainer.new()
+	title_box.add_theme_constant_override("separation", 2)
+	avatar_row.add_child(title_box)
 
 	dash_name_text = Label.new()
-	dash_name_text.text = "关羽 [武圣 · 骑兵]"
-	dash_name_text.add_theme_font_size_override("font_size", 17)
-	dash_name_text.add_theme_color_override("font_color", Color(0.95, 0.85, 0.45))
-	name_box.add_child(dash_name_text)
+	dash_name_text.text = "武将名"
+	dash_name_text.add_theme_font_size_override("font_size", 16)
+	title_box.add_child(dash_name_text)
 
 	dash_status_text = Label.new()
-	dash_status_text.text = "我方主力 · ● 待命中"
+	dash_status_text.text = "部队状态"
 	dash_status_text.add_theme_font_size_override("font_size", 12)
-	dash_status_text.add_theme_color_override("font_color", Color(0.4, 0.9, 0.5))
-	name_box.add_child(dash_status_text)
+	title_box.add_child(dash_status_text)
 
-	var hp_vbox := VBoxContainer.new()
-	hp_vbox.add_theme_constant_override("separation", 3)
-	dash_unit_view.add_child(hp_vbox)
+	# 2. 生命值状态条 (带数值)
+	var hp_box := VBoxContainer.new()
+	hp_box.add_theme_constant_override("separation", 3)
+	dash_unit_view.add_child(hp_box)
 
 	dash_hp_text = Label.new()
-	dash_hp_text.text = "生命值: 450 / 450"
-	dash_hp_text.add_theme_font_size_override("font_size", 13)
-	dash_hp_text.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
-	hp_vbox.add_child(dash_hp_text)
+	dash_hp_text.text = "生命值: 100 / 100"
+	dash_hp_text.add_theme_font_size_override("font_size", 12)
+	dash_hp_text.add_theme_color_override("font_color", Color(0.85, 0.9, 0.85))
+	hp_box.add_child(dash_hp_text)
 
 	dash_hp_bar = ProgressBar.new()
-	dash_hp_bar.custom_minimum_size = Vector2(0, 12)
-	dash_hp_bar.max_value = 100
-	dash_hp_bar.value = 100
+	dash_hp_bar.custom_minimum_size = Vector2(0, 10)
 	dash_hp_bar.show_percentage = false
 	var hp_fill_style := StyleBoxFlat.new()
-	hp_fill_style.bg_color = Color(0.22, 0.85, 0.40)
+	hp_fill_style.bg_color = Color(0.2, 0.82, 0.38)
 	hp_fill_style.set_corner_radius_all(3)
 	var hp_bg_style := StyleBoxFlat.new()
 	hp_bg_style.bg_color = Color(0.15, 0.16, 0.18)
 	hp_bg_style.set_corner_radius_all(3)
 	dash_hp_bar.add_theme_stylebox_override("fill", hp_fill_style)
 	dash_hp_bar.add_theme_stylebox_override("background", hp_bg_style)
-	hp_vbox.add_child(dash_hp_bar)
+	hp_box.add_child(dash_hp_bar)
+
+	# 3. 四维属性面板 (攻/防/移/射)
+	var stat_panel := PanelContainer.new()
+	var stat_sb := StyleBoxFlat.new()
+	stat_sb.bg_color = Color(0.08, 0.09, 0.11, 0.8)
+	stat_sb.border_color = Color(0.25, 0.25, 0.3, 0.5)
+	stat_sb.set_border_width_all(1)
+	stat_sb.set_corner_radius_all(4)
+	stat_sb.content_margin_left = 10
+	stat_sb.content_margin_right = 10
+	stat_sb.content_margin_top = 8
+	stat_sb.content_margin_bottom = 8
+	stat_panel.add_theme_stylebox_override("panel", stat_sb)
+	dash_unit_view.add_child(stat_panel)
 
 	var stat_grid := GridContainer.new()
 	stat_grid.columns = 2
 	stat_grid.add_theme_constant_override("h_separation", 20)
-	stat_grid.add_theme_constant_override("v_separation", 4)
-	dash_unit_view.add_child(stat_grid)
+	stat_grid.add_theme_constant_override("v_separation", 6)
+	stat_panel.add_child(stat_grid)
 
 	dash_stat_atk = Label.new()
-	dash_stat_atk.text = "⚔️ 攻击力: 30"
+	dash_stat_atk.text = "⚔️ 攻击: 20"
 	dash_stat_atk.add_theme_font_size_override("font_size", 13)
 	stat_grid.add_child(dash_stat_atk)
 
 	dash_stat_def = Label.new()
-	dash_stat_def.text = "🛡️ 防御力: 12"
+	dash_stat_def.text = "🛡️ 防御: 10"
 	dash_stat_def.add_theme_font_size_override("font_size", 13)
 	stat_grid.add_child(dash_stat_def)
 
 	dash_stat_mov = Label.new()
-	dash_stat_mov.text = "👟 移动力: 6 格"
+	dash_stat_mov.text = "👟 移动: 4 格"
 	dash_stat_mov.add_theme_font_size_override("font_size", 13)
 	stat_grid.add_child(dash_stat_mov)
 
 	dash_stat_rng = Label.new()
-	dash_stat_rng.text = "🎯 射  程: 1 格"
+	dash_stat_rng.text = "🎯 射程: 1 格"
 	dash_stat_rng.add_theme_font_size_override("font_size", 13)
 	stat_grid.add_child(dash_stat_rng)
 
+	# 4. 专属机制卡片 (关羽龙斩蓄力 / 吕布方天段数 / 张飞咆哮 / 许褚爆甲 / 臧霸高地)
 	dash_gimmick_box = PanelContainer.new()
+	var gim_sb := StyleBoxFlat.new()
+	gim_sb.bg_color = Color(0.12, 0.13, 0.17, 0.95)
+	gim_sb.border_color = Color(0.7, 0.55, 0.25, 0.8)
+	gim_sb.set_border_width_all(1)
+	gim_sb.set_corner_radius_all(6)
+	gim_sb.content_margin_left = 10
+	gim_sb.content_margin_right = 10
+	gim_sb.content_margin_top = 8
+	gim_sb.content_margin_bottom = 8
+	dash_gimmick_box.add_theme_stylebox_override("panel", gim_sb)
 	dash_unit_view.add_child(dash_gimmick_box)
 
 	var gim_box := VBoxContainer.new()
-	gim_box.add_theme_constant_override("separation", 3)
+	gim_box.add_theme_constant_override("separation", 4)
 	dash_gimmick_box.add_child(gim_box)
 
 	dash_gimmick_title = Label.new()
-	dash_gimmick_title.text = "🐉 千里青龙势"
-	dash_gimmick_title.add_theme_font_size_override("font_size", 14)
-	dash_gimmick_title.add_theme_color_override("font_color", Color(0.3, 1.0, 0.6))
+	dash_gimmick_title.text = "✨ 专属战技机制"
+	dash_gimmick_title.add_theme_font_size_override("font_size", 13)
+	dash_gimmick_title.add_theme_color_override("font_color", Color(0.95, 0.8, 0.4))
 	gim_box.add_child(dash_gimmick_title)
 
 	dash_gimmick_desc = Label.new()
-	dash_gimmick_desc.text = "蓄力 0/10 格\n跑得越远斩得越狠！"
+	dash_gimmick_desc.text = "机制说明文本..."
 	dash_gimmick_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	dash_gimmick_desc.add_theme_font_size_override("font_size", 12)
-	dash_gimmick_desc.add_theme_color_override("font_color", Color(0.8, 0.9, 0.8))
 	gim_box.add_child(dash_gimmick_desc)
 
 	dash_gimmick_bar = ProgressBar.new()
 	dash_gimmick_bar.custom_minimum_size = Vector2(0, 8)
-	dash_gimmick_bar.max_value = 100
-	dash_gimmick_bar.value = 0
 	dash_gimmick_bar.show_percentage = false
 	var gim_fill_style := StyleBoxFlat.new()
-	gim_fill_style.bg_color = Color(0.3, 1.0, 0.6)
+	gim_fill_style.bg_color = Color(0.85, 0.65, 0.25)
 	gim_fill_style.set_corner_radius_all(2)
 	var gim_bg_style := StyleBoxFlat.new()
 	gim_bg_style.bg_color = Color(0.15, 0.16, 0.18)
@@ -498,6 +526,40 @@ func _init_dashboard() -> void:
 	dash_gimmick_bar.add_theme_stylebox_override("fill", gim_fill_style)
 	dash_gimmick_bar.add_theme_stylebox_override("background", gim_bg_style)
 	gim_box.add_child(dash_gimmick_bar)
+
+## 动态按章节设置主要军令、战术目标与军机要策
+func _update_chapter_objectives() -> void:
+	if dash_primary_obj == null or dash_secondary_obj == null or dash_tips_content == null:
+		return
+	var commander := _enemy_commander()
+	var c_name := commander.name if commander else "敌方主将"
+	var c_hp_str := " (HP: %d/%d)" % [commander.hp, commander.max_hp] if (commander and commander.alive) else ""
+
+	if commander and not commander.alive:
+		dash_primary_obj.text = "🎉 敌将已被击溃！大获全胜！"
+		return
+
+	match chapter_id:
+		"chapter1":
+			dash_primary_obj.text = "🎯 主要军令：斩杀敌方主将【%s】%s" % [c_name, c_hp_str]
+			dash_secondary_obj.text = "⭐ 战术目标：5 回合内速胜（防止狂力叠高）"
+			dash_tips_content.text = "• 关羽【千里·青龙斩】：每移动 1 格蓄力+1（骑乘赵云效率翻倍）。跑得越远伤害越高！满 10 格可全屏必杀！\n• 张飞【燕人咆哮】：使用【待机】积蓄怒吼轮数，满 3 轮可大范围强力眩晕敌军！\n• 华雄战力随回合膨胀，切勿打阵地持久战！"
+		"chapter2":
+			dash_primary_obj.text = "🎯 主要军令：击退天下无双【%s】%s" % [c_name, c_hp_str]
+			dash_secondary_obj.text = "⭐ 战术目标：打断方天连击，击破鬼神神话"
+			dash_tips_content.text = "• 吕布【鬼神方天】：连击跨回合保留，第 3 击伤害翻 3 倍！\n• 张飞【燕人咆哮】：必须在吕布出第 3 击前将其眩晕，强行打断连击！\n• 关羽合体赵云超远位移，可迅速切入战场合围吕布！"
+		"chapter3":
+			dash_primary_obj.text = "🎯 主要军令：降伏虎痴【%s】%s" % [c_name, c_hp_str]
+			dash_secondary_obj.text = "⭐ 战术目标：全员爆甲狂笑互搏，集火克敌"
+			dash_tips_content.text = "• 许褚【裸衣死战】：半血后爆甲降低 50% 防御，但获得双倍攻速与吸血！\n• 爆甲波及全场，我方防御同样骤降，必须迅速集火秒杀！\n• 活用行囊【大黄丹】AOE 或远距离战法，避免与裸衣许褚近身拼刀！"
+		"chapter4":
+			dash_primary_obj.text = "🎯 主要军令：扫平泰山盘踞【%s】%s" % [c_name, c_hp_str]
+			dash_secondary_obj.text = "⭐ 战术目标：夺取险峰高地，破其坚垒"
+			dash_tips_content.text = "• 臧霸【占山为王】：身处棕黄高地格攻防额外提升 30%！\n• 刘皇叔亲征踏险峰，可抢先占领高地或引诱臧霸下山！\n• 高地单位对我方有压制优势，切忌在低洼处迎击！"
+		_:
+			dash_primary_obj.text = "🎯 主要军令：斩杀敌方主将【%s】%s" % [c_name, c_hp_str]
+			dash_secondary_obj.text = "⭐ 战术目标：全歼敌军或斩首敌将"
+			dash_tips_content.text = "• 活用走位与技能配合，取得战役胜利！"
 
 func _update_dashboard() -> void:
 	if dash_overview == null or dash_unit_view == null:
@@ -508,11 +570,7 @@ func _update_dashboard() -> void:
 		dash_unit_view.visible = false
 		dash_player_count.text = "🛡️ 我方在列：%d 人" % _camp_units("player").size()
 		dash_enemy_count.text = "⚔️ 敌方存活：%d 人" % _camp_units("enemy").size()
-		var commander := _enemy_commander()
-		if commander and commander.alive:
-			dash_primary_obj.text = "🎯 主要军令：斩杀敌方主将【%s】(HP: %d/%d)" % [commander.name, commander.hp, commander.max_hp]
-		else:
-			dash_primary_obj.text = "🎉 敌将已被击溃！大获全胜！"
+		_update_chapter_objectives()
 		return
 
 	dash_overview.visible = false
@@ -1418,7 +1476,11 @@ func _spawn_float_text(cell: Vector2i, text: String, color: Color, is_crit: bool
 	lbl.add_theme_color_override("font_outline_color", Color(0.04, 0.04, 0.05, 0.95))
 	var font_sz := 24 if is_crit else 16
 	lbl.add_theme_font_size_override("font_size", font_sz)
-	lbl.position = _cell_to_px(cell) + Vector2(-36, -30)
+	var px := _cell_to_px(cell)
+	var text_w := float(text.length()) * (float(font_sz) * 0.95)
+	var target_x := px.x - text_w * 0.5
+	target_x = clampf(target_x, 30.0, max(30.0, 630.0 - text_w))
+	lbl.position = Vector2(target_x, px.y - 32.0)
 	lbl.z_index = 55
 	unit_root.add_child(lbl)
 	var tw := create_tween()
@@ -1870,14 +1932,12 @@ func _play_dialog(key: String) -> void:
 	if not dialogs.has(actual_key):
 		return
 	pending_dialog = dialogs[actual_key].duplicate()
-	dialog_showing = true
-	dialog_box.visible = true
+	_set_dialog_visible(true)
 	_show_next_dialog_line()
 
 func _show_next_dialog_line() -> void:
 	if pending_dialog.size() == 0:
-		dialog_showing = false
-		dialog_box.visible = false
+		_set_dialog_visible(false)
 		return
 	var line: Dictionary = pending_dialog.pop_front()
 	var speaker: String = line.get("speaker", "")
@@ -1889,16 +1949,14 @@ func _on_dialog_btn_pressed() -> void:
 	if pending_dialog.size() > 0:
 		_show_next_dialog_line()
 	else:
-		dialog_showing = false
-		dialog_box.visible = false
+		_set_dialog_visible(false)
 		# 对话结束后：若是胜利对话，进入结算
 		if win_dialog_played:
 			_go_to_result()
 
 func _on_dialog_skip_pressed() -> void:
 	pending_dialog.clear()
-	dialog_showing = false
-	dialog_box.visible = false
+	_set_dialog_visible(false)
 	if win_dialog_played:
 		_go_to_result()
 
@@ -1913,8 +1971,6 @@ func _cancel_input() -> void:
 	input_mode = InputMode.NONE
 	selected_id = ""
 	_clear_overlay()
-	command_menu.visible = false
-	_clear_command_menu()
 	_update_dashboard()
 
 func _clear_overlay() -> void:
@@ -1947,6 +2003,8 @@ func _check_defeat() -> bool:
 	return false
 
 func _show_win_dialog() -> void:
+	if win_dialog_played:
+		return
 	win_dialog_played = true
 	_play_dialog(chapter_id + "_win")
 
@@ -1976,33 +2034,55 @@ func _go_to_result() -> void:
 	_show_result_panel(title_text, body, nxt)
 
 func _show_result_panel(title_text: String, body: String, nxt: String) -> void:
-	# 若无面板则构建
 	if result_panel == null:
 		_build_result_panel()
+	var mask := $UI.get_node_or_null("ResultMask")
+	if mask:
+		mask.visible = true
 	result_title.text = title_text
 	result_body.text = body
 	result_next.visible = nxt != ""
 	result_next.disabled = nxt == ""
-	result_next.text = "下一关" if nxt != "" else "无下一关"
+	result_next.text = "奔赴下一关 ⚔️" if nxt != "" else "大业告成 🏆"
 	result_panel.visible = true
 
 ## 用代码构建结算面板（避免 tscn 布局解析问题）
 func _build_result_panel() -> void:
+	var mask := ColorRect.new()
+	mask.name = "ResultMask"
+	mask.visible = false
+	mask.color = Color(0.03, 0.04, 0.06, 0.75)
+	mask.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mask.z_index = 110
+	$UI.add_child(mask)
+
 	var panel := PanelContainer.new()
 	panel.visible = false
-	panel.position = Vector2(340, 160)
-	panel.size = Vector2(600, 400)
+	panel.position = Vector2(340, 140)
+	panel.size = Vector2(600, 420)
+	panel.z_index = 120
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.09, 0.13, 0.98)
+	sb.border_color = Color(0.9, 0.78, 0.35, 1.0)
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(14)
+	sb.content_margin_left = 28
+	sb.content_margin_right = 28
+	sb.content_margin_top = 24
+	sb.content_margin_bottom = 24
+	panel.add_theme_stylebox_override("panel", sb)
 	$UI.add_child(panel)
 	result_panel = panel
 
 	var vbox := VBoxContainer.new()
 	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.add_theme_constant_override("separation", 14)
+	vbox.add_theme_constant_override("separation", 20)
 	panel.add_child(vbox)
 
 	var title := Label.new()
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", Color(0.98, 0.85, 0.3))
 	vbox.add_child(title)
 	result_title = title
 
@@ -2010,24 +2090,39 @@ func _build_result_panel() -> void:
 	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.add_theme_font_size_override("font_size", 18)
+	body.add_theme_color_override("font_color", Color(0.9, 0.95, 0.9))
 	vbox.add_child(body)
 	result_body = body
 
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 20)
+	row.add_theme_constant_override("separation", 24)
 	vbox.add_child(row)
 
 	var next := Button.new()
-	next.custom_minimum_size = Vector2(150, 50)
-	next.text = "下一关"
+	next.custom_minimum_size = Vector2(180, 52)
+	next.text = "奔赴下一关 ⚔️"
+	var btn_next_sb := StyleBoxFlat.new()
+	btn_next_sb.bg_color = Color(0.18, 0.45, 0.25)
+	btn_next_sb.border_color = Color(0.35, 0.85, 0.45)
+	btn_next_sb.set_border_width_all(2)
+	btn_next_sb.set_corner_radius_all(8)
+	next.add_theme_stylebox_override("normal", btn_next_sb)
+	next.add_theme_font_size_override("font_size", 16)
 	next.pressed.connect(_on_result_next)
 	row.add_child(next)
 	result_next = next
 
 	var home := Button.new()
-	home.custom_minimum_size = Vector2(150, 50)
-	home.text = "返回主城"
+	home.custom_minimum_size = Vector2(160, 52)
+	home.text = "返回主城 🏰"
+	var btn_home_sb := StyleBoxFlat.new()
+	btn_home_sb.bg_color = Color(0.2, 0.22, 0.28)
+	btn_home_sb.border_color = Color(0.5, 0.55, 0.65)
+	btn_home_sb.set_border_width_all(2)
+	btn_home_sb.set_corner_radius_all(8)
+	home.add_theme_stylebox_override("normal", btn_home_sb)
+	home.add_theme_font_size_override("font_size", 16)
 	home.pressed.connect(_on_result_home)
 	row.add_child(home)
 	result_home = home

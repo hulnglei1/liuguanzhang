@@ -8,7 +8,18 @@ func _initialize() -> void:
 	print("[CAPTURE] 启动全流程高清画质截图捕获...")
 	var save := SaveCore.load_state()
 	save["chapters"] = ["chapter1", "chapter2", "chapter3", "chapter4"]
-	save["prestige"] = 8000
+	save["prestige"] = 9000
+	save["collection"] = {
+		"warrior_liubei": true, "warrior_guanyu": true, "warrior_zhangfei": true,
+		"warrior_zhaoyun": true, "warrior_huaxiong": true, "warrior_lubu": true,
+		"warrior_xuchu": true, "warrior_caocao": true,
+		"skill_dragon_slash": true, "skill_roar": true, "skill_seven_dash": true,
+		"skill_lubu_fangtian": true, "skill_naked_armor": true,
+		"scene_wenjiu_huaxiong": true, "scene_sanying_lubu": true, "scene_naked_battle": true
+	}
+	save["inventory"] = {
+		"corn": 2, "sweet_potato": 1, "dahuangdan": 1, "bracer": 1
+	}
 	SaveCore.save_state(save)
 	change_scene_to_file("res://scenes/main.tscn")
 	_run_captures()
@@ -59,11 +70,11 @@ func _run_captures() -> void:
 	BattleScript.chapter_id = "chapter1"
 	change_scene_to_file("res://scenes/battle.tscn")
 	await _wait(1.2)
-	# 截对白
+	# 截取开局剧情对白
 	await _snap("05_battle_dialog.png")
-	# 跳过对白
-	while current_scene and current_scene.dialog_showing and current_scene.pending_dialog.size() > 0:
-		current_scene._on_dialog_btn_pressed()
+	# 跳过开场对白，展现纯净棋盘与军师战况纪要
+	if current_scene.has_method("_on_dialog_skip_pressed"):
+		current_scene._on_dialog_skip_pressed()
 	await _wait(0.6)
 
 	# 关羽合体骑赵云 + 冲锋
@@ -80,11 +91,11 @@ func _run_captures() -> void:
 	current_scene._do_skill(Vector2i(10, 4))
 	await _wait(0.3)
 	await _snap("07_dragon_slash_vfx.png")
-	await _wait(1.2)
+	await _wait(1.0)
 
-	# 胜利结算
-	while current_scene and current_scene.dialog_showing and current_scene.pending_dialog.size() > 0:
-		current_scene._on_dialog_btn_pressed()
+	# 击杀后跳过胜利对话，弹出高质感胜利结算面板
+	if current_scene.has_method("_on_dialog_skip_pressed"):
+		current_scene._on_dialog_skip_pressed()
 	await _wait(0.8)
 	await _snap("08_victory_settlement.png")
 
@@ -92,8 +103,8 @@ func _run_captures() -> void:
 	BattleScript.chapter_id = "chapter2"
 	change_scene_to_file("res://scenes/battle.tscn")
 	await _wait(1.0)
-	while current_scene and current_scene.dialog_showing and current_scene.pending_dialog.size() > 0:
-		current_scene._on_dialog_btn_pressed()
+	if current_scene.has_method("_on_dialog_skip_pressed"):
+		current_scene._on_dialog_skip_pressed()
 	await _wait(0.5)
 	var lubu = current_scene._unit_by_id("lubu")
 	if lubu:

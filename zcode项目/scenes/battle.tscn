@@ -122,16 +122,16 @@ theme_override_constants/separation = 6
 [node name="DialogBox" type="PanelContainer" parent="UI"]
 visible = false
 z_index = 100
-offset_left = 120.0
-offset_top = 490.0
-offset_right = 1160.0
-offset_bottom = 700.0
+offset_left = 60.0
+offset_top = 500.0
+offset_right = 1220.0
+offset_bottom = 704.0
 
 [node name="Margin" type="MarginContainer" parent="UI/DialogBox"]
 layout_mode = 2
-theme_override_constants/margin_left = 20
+theme_override_constants/margin_left = 24
 theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 20
+theme_override_constants/margin_right = 24
 theme_override_constants/margin_bottom = 16
 
 [node name="VBox" type="VBoxContainer" parent="UI/DialogBox/Margin"]

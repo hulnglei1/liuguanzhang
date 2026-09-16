@@ -142,16 +142,21 @@ func _build_menu() -> void:
 	btn_gallery.pressed.connect(_go_gallery)
 	nav_panel.add_child(btn_gallery)
 
-	# 右侧声望与通关信息
+	# 右侧声望与通关信息徽章胶囊
+	var status_badge := Panel.new()
+	status_badge.position = Vector2(610, 8)
+	status_badge.size = Vector2(574, 38)
+	status_badge.add_theme_stylebox_override("panel", _create_box_style(Color(0.06, 0.07, 0.10, 0.95), Color(0.83, 0.69, 0.22, 0.5), 18, 1))
+	nav_panel.add_child(status_badge)
+
 	label_status = Label.new()
 	label_status.text = _format_status_text()
-	label_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	label_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label_status.add_theme_font_size_override("font_size", 14)
-	label_status.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	label_status.position = Vector2(610, 12)
-	label_status.size = Vector2(570, 30)
-	nav_panel.add_child(label_status)
+	label_status.add_theme_color_override("font_color", Color(1.0, 0.88, 0.35))
+	label_status.set_anchors_preset(Control.PRESET_FULL_RECT)
+	status_badge.add_child(label_status)
 
 	# 3. 四大章节战役卡片 (2行 x 2列，每张卡片 580 x 230)
 	var cleared_chapters: Array = save.get("chapters", [])
