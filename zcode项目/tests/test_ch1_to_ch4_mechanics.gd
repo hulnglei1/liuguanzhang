@@ -1,4 +1,4 @@
-﻿extends SceneTree
+extends SceneTree
 
 const BattleUnitScript := preload("res://scripts/entities/unit.gd")
 const SkillsCore := preload("res://scripts/entities/skills.gd")
@@ -230,17 +230,17 @@ func _init() -> void:
 		failed += 1
 
 	# ----------------------------------------------------
-	# 10. 测试汜水关中轴关隘防线配置（x=6 设立关门阻断）
+	# 10. 测试汜水关中轴关隘防线配置（x=10 设立关门，位于华雄身后）
 	# ----------------------------------------------------
 	var ch1_file = FileAccess.open("res://data/chapters/chapter1.json", FileAccess.READ)
 	var ch1_json = JSON.parse_string(ch1_file.get_as_text())
-	var has_gate_at_6_4 := false
+	var has_gate_at_10_4 := false
 	for o in ch1_json["map"]["obstacles"]:
-		if int(o["x"]) == 6 and int(o["y"]) == 4 and bool(o.get("is_gate", false)):
-			has_gate_at_6_4 = true
+		if int(o["x"]) == 10 and int(o["y"]) == 4 and bool(o.get("is_gate", false)):
+			has_gate_at_10_4 = true
 			break
-	if has_gate_at_6_4 and ch1_json["map"]["obstacles"].size() >= 5:
-		print("  [PASS] 汜水关关隘配置合规: 设立中轴关门 (6,4) 与横向关防工事")
+	if has_gate_at_10_4 and ch1_json["map"]["obstacles"].size() >= 5:
+		print("  [PASS] 汜水关关隘配置合规: 设立城门 (10,4) 于华雄身后")
 		passed += 1
 	else:
 		printerr("  [FAIL] 汜水关关门配置不符预期")

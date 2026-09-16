@@ -65,14 +65,14 @@ func _test_chapter1_data_and_dialogs() -> void:
 	_assert("gongsunzan" in player_units, "公孙瓒参战（后排神箭压制）")
 	_assert(not ("zhaoyun" in player_units), "赵云在第一关未登场（严格契合原著小说第1~6章走向）")
 	
-	# 检查关隘城门设置
+	# 检查关隘城门设置（城门位于华雄身后 x=10）
 	var obstacles: Array = ch1.get("map", {}).get("obstacles", [])
 	var has_gate := false
 	for obs in obstacles:
-		if obs.get("x") == 6 and obs.get("y") == 4 and obs.get("is_gate", false):
+		if obs.get("x") == 10 and obs.get("y") == 4 and obs.get("is_gate", false):
 			has_gate = true
 			break
-	_assert(has_gate, "汜水关关隘配置了中轴主门 (6,4)")
+	_assert(has_gate, "汜水关关隘城门配置在华雄身后 (10,4)")
 	
 	# 检查对白剧本
 	var d1: Dictionary = _load_json("res://data/dialogs/chapter1_dialogs.json")
@@ -90,9 +90,10 @@ func _test_chapter1_combat_and_gate() -> void:
 		unit_defs[u.id] = u
 		
 	var guanyu = BattleUnitScript.from_data(unit_defs["guanyu"], Vector2i(2, 5))
-	var huaxiong = BattleUnitScript.from_data(unit_defs["huaxiong"], Vector2i(10, 4))
-	var liubei = BattleUnitScript.from_data(unit_defs["liubei"], Vector2i(9, 3))
+	var huaxiong = BattleUnitScript.from_data(unit_defs["huaxiong"], Vector2i(7, 4))
+	var liubei = BattleUnitScript.from_data(unit_defs["liubei"], Vector2i(6, 3))
 	var zhangfei = BattleUnitScript.from_data(unit_defs["zhangfei"], Vector2i(1, 6))
+	var minion = BattleUnitScript.from_data(unit_defs["dao_bing_1"], Vector2i(6, 5))
 	
 	# 1. 曹操传几何：步兵刘备斜角攻击华雄，骑将华雄无法反击
 	var can_diagonal: bool = GridCore.can_attack(liubei.cell, huaxiong.cell, liubei.is_cavalry(), liubei.rng)
@@ -106,16 +107,28 @@ func _test_chapter1_combat_and_gate() -> void:
 	_assert(huaxiong.stun_turns > 0, "张飞战吼成功眩晕华雄")
 	_assert(zhangfei.cds.get("roar", 0) == 3, "战吼释放后进入 3 回合 CD")
 	
-	# 3. 关羽千里逃跑蓄力：跑满 10 格，一击崩塌汜水关门
+	# 3. 关羽千里逃跑蓄力：跑满 10 格，一击斩杀华雄并崩塌身后汜水关门
 	guanyu.charge = 10
 	var slash_evs: Array = SkillsCore.do_dragon_slash(guanyu, huaxiong)
 	var gate_shattered := false
 	for ev in slash_evs:
 		if ev.get("shatter_gate", false):
 			gate_shattered = true
-	_assert(gate_shattered, "关羽满蓄力龙斩触发全屏神威并崩塌汜水关城门")
+	_assert(gate_shattered, "关羽满蓄力龙斩触发全屏神威并崩塌华雄身后汜水关城门")
 	
-	# 4. 关羽受击气脉震散：受击清零
+	# 4. 关羽龙斩斩杀小兵，华雄存活，不误触通关机制
+	var huaxiong_boss = BattleUnitScript.from_data(unit_defs["huaxiong"], Vector2i(7, 4))
+	guanyu.charge = 10
+	var minion_slash_evs: Array = SkillsCore.do_dragon_slash(guanyu, minion)
+	var minion_gate := false
+	for ev in minion_slash_evs:
+		if ev.get("shatter_gate", false):
+			minion_gate = true
+	_assert(not minion_gate, "满蓄力龙斩打小兵不触发身后关门崩塌")
+	_assert(not minion.alive, "小兵承受龙斩暴击阵亡")
+	_assert(huaxiong_boss.alive, "主将华雄依然存活（未打死主帅绝不判定通关）")
+	
+	# 5. 关羽受击气脉震散：受击清零
 	guanyu.charge = 8
 	huaxiong.stun_turns = 0
 	# 模拟关羽遭截击：气脉震散清零

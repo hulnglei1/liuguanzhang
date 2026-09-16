@@ -245,7 +245,7 @@ func _draw_obstacles() -> void:
 		return
 	for o in chapter["map"]["obstacles"]:
 		var pos := Vector2i(int(o.x), int(o.y))
-		var is_gate: bool = bool(o.get("is_gate", false)) or (chapter_id == "chapter1" and pos.x == 6 and pos.y == 4)
+		var is_gate: bool = bool(o.get("is_gate", false))
 		var obs_node := Node2D.new()
 		obs_node.position = _cell_to_px(pos)
 		obs_node.z_index = 8
@@ -1811,7 +1811,6 @@ func _apply_events(events: Array) -> void:
 				if ev.fx == "dragon_full_screen":
 					if ev.get("shatter_gate", false):
 						_break_sishui_gate()
-					_show_win_dialog()
 
 func _flash_unit(id: String, color: Color) -> void:
 	var node: Node2D = unit_nodes.get(id)

@@ -88,7 +88,8 @@ static func do_dragon_slash(caster, target, pierced_targets: Array = []) -> Arra
 		CombatCore.make_damage_event(target.id, dmg, false),
 	]
 	if full:
-		ev.append({"type": "fx", "fx": "dragon_full_screen", "target": target.id, "shatter_gate": true})
+		var can_shatter: bool = (target.id == "huaxiong" or target.is_commander)
+		ev.append({"type": "fx", "fx": "dragon_full_screen", "target": target.id, "shatter_gate": can_shatter})
 		ev.append({"type": "knockback", "target": target.id, "cells": 2})
 	if not target.alive:
 		ev.append({"type": "death", "target": target.id})

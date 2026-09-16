@@ -5,11 +5,11 @@
     "w": 12,
     "h": 10,
     "obstacles": [
-      {"x": 6, "y": 2},
-      {"x": 6, "y": 3},
-      {"x": 6, "y": 4, "is_gate": true},
-      {"x": 6, "y": 5},
-      {"x": 6, "y": 6}
+      {"x": 10, "y": 2},
+      {"x": 10, "y": 3},
+      {"x": 10, "y": 4, "is_gate": true},
+      {"x": 10, "y": 5},
+      {"x": 10, "y": 6}
     ]
   },
   "player_spawn": [
@@ -19,11 +19,11 @@
     {"unit": "gongsunzan", "x": 2, "y": 3}
   ],
   "enemy_spawn": [
-    {"unit": "huaxiong", "x": 10, "y": 4},
-    {"unit": "dao_bing_1", "x": 9, "y": 3},
-    {"unit": "dao_bing_2", "x": 9, "y": 5},
-    {"unit": "gong_bing_1", "x": 10, "y": 2},
-    {"unit": "gong_bing_2", "x": 10, "y": 6}
+    {"unit": "huaxiong", "x": 7, "y": 4},
+    {"unit": "dao_bing_1", "x": 6, "y": 3},
+    {"unit": "dao_bing_2", "x": 6, "y": 5},
+    {"unit": "gong_bing_1", "x": 7, "y": 2},
+    {"unit": "gong_bing_2", "x": 7, "y": 6}
   ],
   "morale": {"player": 100, "enemy": 100},
   "win_condition": "kill_commander",
