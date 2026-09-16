@@ -55,13 +55,18 @@ static func can_charge(skill_id: String) -> bool:
 ## 返回事件数组（伤害事件）
 static func do_attack(caster, target) -> Array:
 	var mult: float = 1.0
-	# 若关羽骑乘中（合体），攻击力用骑乘者关羽、移动用马赵云 —— 伤害用骑乘者atk
+	# 若关羽骑乘赵云（合体），打出双子合击（关羽刀劈 + 赵云长枪，造成 1.5 倍伤害）
+	if caster.is_mounted():
+		mult = 1.5
 	var attacker_atk: int = caster.effective_atk()
-	# 目标防御用骑乘叠加（若目标是合体体，取较高的def）
 	var target_def: int = target.effective_def()
 	var dmg: int = CombatCore.damage(attacker_atk, mult, target_def)
+	if target.iron_skin:
+		dmg = 0
 	target.take_damage(dmg)
 	var ev: Array = [CombatCore.make_damage_event(target.id, dmg, false)]
+	if target.iron_skin:
+		ev.append({"type": "iron_skin_block", "target": target.id})
 	if not target.alive:
 		ev.append({"type": "death", "target": target.id})
 	return ev
@@ -101,16 +106,21 @@ static func do_dragon_slash(caster, target, pierced_targets: Array = []) -> Arra
 	return ev
 
 ## 结算【燕人战吼】（张飞）
-## 原著小说设定：无需蓄力，开局即可吼，纯CD机制！震得敌军失聪目眩（100%眩晕1回合）
+## 原著小说设定：无需蓄力，开局即可吼，纯CD机制！震得敌军失聪目眩（100%眩晕1回合，且震散吕布方天连击与破除铁皮无敌）
 static func do_roar(caster, targets: Array) -> Array:
 	var mult: float = 1.6
 	var ev: Array = []
 	for t in targets:
+		var had_iron_skin: bool = t.iron_skin
 		var dmg: int = CombatCore.damage(caster.effective_atk(), mult, t.effective_def())
 		t.take_damage(dmg)
 		ev.append(CombatCore.make_damage_event(t.id, dmg, false))
 		t.stun_turns = max(t.stun_turns, 1)
 		ev.append({"type": "stun", "target": t.id, "turns": 1})
+		if t.id == "lubu" or "lubu_fangtian" in t.skill_ids:
+			t.fangtian_reset()
+			if had_iron_skin:
+				ev.append({"type": "iron_skin_break", "target": t.id})
 		if not t.alive:
 			ev.append({"type": "death", "target": t.id})
 	ev.append({"type": "skill", "skill_id": "roar", "caster": caster.id, "fx": "roar", "full": true})
@@ -156,27 +166,32 @@ static func can_mount(rider, horse) -> bool:
 static func mounted_mov(unit, horse) -> int:
 	return horse.mov
 
-## 合体后的蓄力效率（关羽骑赵云 = ×2）
+## 合体后的蓄力效率（原著平衡调整：关羽骑赵云 = 1，移除2倍翻倍）
 static func mounted_charge_efficiency() -> int:
-	return 2
+	return 1
 
-## 吕布·方天乱舞攻击：推进连击→第3击翻3倍
+## 吕布·方天乱舞攻击：推进连击→第3击翻3倍并激活两息铁皮无敌
 ## 返回事件数组
 static func do_lubu_attack(caster, target) -> Array:
 	var atk_mult: float = 1.0
 	caster.fangtian_strike()
-	if caster.combo_strikes >= 3:
-		atk_mult = 3.0  # 第3击翻3倍（effective_atk 已含 _fangtian_multiplier，这里用普通乘也算双保险）
-	# 用 effective_atk() 已含连击倍率，这里把基础倍率设1
-	var dmg: int = CombatCore.damage(caster.effective_atk(), 1.0, target.effective_def())
 	var is_third: bool = caster.combo_strikes >= 3
+	if is_third:
+		atk_mult = 3.0
+	# 用 effective_atk() 已含连击倍率
+	var dmg: int = CombatCore.damage(caster.effective_atk(), 1.0, target.effective_def())
 	target.take_damage(dmg)
 	var ev: Array = [
 		{"type": "skill", "skill_id": "lubu_fangtian", "caster": caster.id,
 		 "fx": "fangtian_third" if is_third else "fangtian", "combo": caster.combo_strikes,
 		 "value": dmg, "target": target.id},
-		CombatCore.make_damage_event(target.id, dmg, false),
+		CombatCore.make_damage_event(target.id, dmg, is_third),
 	]
+	if is_third:
+		caster.iron_skin = true
+		caster.iron_skin_turns = 1
+		caster.combo_strikes = 0  # 第3击打完重置
+		ev.append({"type": "iron_skin", "target": caster.id})
 	if not target.alive:
 		ev.append({"type": "death", "target": target.id})
 	return ev

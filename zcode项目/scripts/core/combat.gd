@@ -95,13 +95,9 @@ static func dash_multiplier(weaves: int) -> float:
 static func hua_boost_multiplier(turns_elapsed: int) -> float:
 	return 1.0 + 0.15 * float(clampi(turns_elapsed, 0, 10))
 
-## 士气修正：士气 >70 全属性 +10%；<30 全属性 −10%（仅作用于 ATK/DEF）
+## 士气修正：基准 100 为 1.0；每偏离 1 点士气调整 0.5% 攻防（范围 0.50 ~ 1.50）
 static func morale_multiplier(morale: int) -> float:
-	if morale > 70:
-		return 1.10
-	elif morale < 30:
-		return 0.90
-	return 1.0
+	return clampf(1.0 + float(morale - 100) * 0.005, 0.5, 1.5)
 
 ## 士气法则：不应战 → 敌军全员 ATK ×2
 const MORALE_REFUSE_MULT: float = 2.0

@@ -56,6 +56,7 @@ var dash_secondary_obj: Label
 var dash_player_count: Label
 var dash_enemy_count: Label
 var dash_tips_content: Label
+var dash_morale_text: Label
 
 var dash_avatar_plate: Polygon2D
 var dash_avatar_text: Label
@@ -82,6 +83,7 @@ var turn_state: Dictionary = {}
 var morale: Dictionary = {"player": 100, "enemy": 100}
 var refuse_penalty_active := false
 var victory := false
+var gate_broken := false
 
 # 输入状态机
 enum InputMode { NONE, SELECT, MOVE, ATTACK, SKILL, POST_MOVE }
@@ -344,6 +346,12 @@ func _init_dashboard() -> void:
 	dash_enemy_count.add_theme_font_size_override("font_size", 14)
 	count_row.add_child(dash_enemy_count)
 
+	dash_morale_text = Label.new()
+	dash_morale_text.text = "🚩 战局士气：我方 100 vs 敌方 100"
+	dash_morale_text.add_theme_font_size_override("font_size", 14)
+	dash_morale_text.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35))
+	dash_overview.add_child(dash_morale_text)
+
 	var tips_panel := PanelContainer.new()
 	dash_overview.add_child(tips_panel)
 	var tips_box := VBoxContainer.new()
@@ -535,11 +543,11 @@ func _update_chapter_objectives() -> void:
 		"chapter1":
 			dash_primary_obj.text = "🎯 主要军令：斩杀敌方主将【%s】%s" % [c_name, c_hp_str]
 			dash_secondary_obj.text = "⭐ 战术目标：5 回合内速胜（防止狂力叠高）"
-			dash_tips_content.text = "• 关羽【千里·青龙斩】：每移动 1 格蓄力+1（骑乘赵云效率翻倍）。跑得越远伤害越高！满 10 格可全屏必杀！\n• 张飞【燕人咆哮】：使用【待机】积蓄怒吼轮数，满 3 轮可大范围强力眩晕敌军！\n• 华雄战力随回合膨胀，切勿打阵地持久战！"
+			dash_tips_content.text = "• 关羽【千里·青龙斩】：每移动 1 格蓄力+1，跑得越远刀芒与贯穿越长！满 10 格震裂城门引发敌军防线崩溃(DEF-20%)！\n• 张飞【燕人战吼】：开局即吼无需蓄力（3回合CD）！范围震晕敌军！\n• 赵云【无限耐力】：牛马神技！行动后直接自愈15%生命！普攻每2次追加一枪！关羽骑乘触发双子合击！\n• 华雄战力随回合膨胀(+15%/回合)，切勿打持久消耗战！"
 		"chapter2":
 			dash_primary_obj.text = "🎯 主要军令：击退天下无双【%s】%s" % [c_name, c_hp_str]
-			dash_secondary_obj.text = "⭐ 战术目标：打断方天连击，击破鬼神神话"
-			dash_tips_content.text = "• 吕布【鬼神方天】：连击跨回合保留，第 3 击伤害翻 3 倍！\n• 张飞【燕人咆哮】：必须在吕布出第 3 击前将其眩晕，强行打断连击！\n• 关羽合体赵云超远位移，可迅速切入战场合围吕布！"
+			dash_secondary_obj.text = "⭐ 战术目标：打断方天连击，破除铁皮无敌"
+			dash_tips_content.text = "• 吕布【方天乱舞】：连击第 3 击伤害翻 3 倍，并触发【两息铁皮无敌】（受到一切伤害为0）！\n• 张飞【燕人战吼】：张飞战吼可震晕吕布并【直接震碎铁皮与打断连击】！\n• 关羽骑乘赵云双子合击（1.5倍输出），抓住破防窗口集火击破！"
 		"chapter3":
 			dash_primary_obj.text = "🎯 主要军令：降伏虎痴【%s】%s" % [c_name, c_hp_str]
 			dash_secondary_obj.text = "⭐ 战术目标：全员爆甲狂笑互搏，集火克敌"
@@ -556,6 +564,12 @@ func _update_chapter_objectives() -> void:
 func _update_dashboard() -> void:
 	if dash_overview == null or dash_unit_view == null:
 		return
+	if dash_morale_text:
+		dash_morale_text.text = "🚩 战局士气：我方 %d vs 敌方 %d（攻防修正 x%.2f / x%.2f）" % [
+			morale.player, morale.enemy,
+			CombatCore.morale_multiplier(morale.player),
+			CombatCore.morale_multiplier(morale.enemy)
+		]
 	var u: BattleUnitScript = _unit_by_id(selected_id)
 	if u == null or not u.alive:
 		dash_overview.visible = true
@@ -1454,7 +1468,7 @@ func _do_move(cell: Vector2i) -> void:
 		elif u.charge >= 4:
 			_spawn_float_text(cell, "🐉 青龙腾云！刀芒暴涨！", Color(0.4, 0.85, 0.9), false)
 		elif u.is_mounted():
-			_spawn_float_text(cell, "赵云汗血飞驰！双倍充能！", Color(0.4, 0.9, 1.0))
+			_spawn_float_text(cell, "赵云汗血飞驰！神速冲锋！", Color(0.4, 0.9, 1.0))
 		else:
 			_spawn_float_text(cell, "马哥撑住！逃跑蓄力中！", Color(0.5, 0.8, 0.9))
 	else:
@@ -1505,6 +1519,26 @@ func _do_attack(cell: Vector2i) -> void:
 	command_menu.visible = false
 	var events := SkillsCore.do_attack(u, t)
 	_apply_events(events)
+
+	# 骑乘双人双打反馈（关羽刀劈 + 赵云长枪）
+	if u.is_mounted():
+		_spawn_float_text(t.cell, "🐎 关羽赵云·双子合击！", Color(1.0, 0.85, 0.3), true)
+		info_label.text += "\n关羽跨赵云冲锋！双刃齐出打出 1.5 倍合击伤害！"
+
+	# 赵云普攻连击：每 2 次攻击必定追加一枪（额外打出 50% 伤害）
+	if u.id == "zhaoyun":
+		u.zhaoyun_strike_count += 1
+		if u.zhaoyun_strike_count >= 2:
+			u.zhaoyun_strike_count = 0
+			if t and t.alive:
+				var extra_dmg: int = max(int(round(CombatCore.damage(u.effective_atk(), 0.5, t.effective_def()))), 1)
+				if t.iron_skin:
+					extra_dmg = 0
+				t.take_damage(extra_dmg)
+				_apply_events([CombatCore.make_damage_event(t.id, extra_dmg, false)])
+				_spawn_float_text(t.cell, "⚡ 百鸟追击！额外一枪！", Color(0.4, 0.9, 1.0), true)
+				info_label.text += "\n赵云长枪如电！追加百鸟戳刺打出额外 %d 伤害！" % extra_dmg
+
 	# 敌方反击判定：若目标仍存活且未被眩晕，且攻击者在反击射程范围内，触发反击！
 	if t and t.alive and not t.is_stunned():
 		if GridCore.can_attack(t.cell, u.cell, t.is_cavalry(), t.rng):
@@ -1627,10 +1661,16 @@ func _do_skill(cell: Vector2i) -> void:
 ## ---------- 事件应用 ----------
 func _apply_events(events: Array) -> void:
 	for ev in events:
+		if ev.get("shatter_gate", false):
+			_break_sishui_gate()
 		match ev.get("type"):
 			"damage":
 				var t: BattleUnitScript = _unit_by_id(ev.target)
 				if t:
+					if t.iron_skin or int(ev.value) == 0:
+						_spawn_float_text(t.cell, "🛡️ 铁皮防弹！刀枪不入！", Color(0.9, 0.9, 0.95), true)
+						info_label.text += "\n%s 处于防弹铁皮状态！物理伤害判定为 0！" % t.name
+						continue
 					_flash_unit(t.id, Color(1, 0.3, 0.3))
 					_unit_bounce(t.id)
 					var is_crit: bool = ev.get("crit", false) or int(ev.get("value", 0)) >= 50
@@ -1660,6 +1700,14 @@ func _apply_events(events: Array) -> void:
 						_spawn_burst(t2.cell, Color(0.9, 0.2, 0.2, 0.5), 1)
 					_unit_node_hide(t2.id)
 					info_label.text += "\n%s 阵亡！" % t2.name
+					# 动态士气结算
+					if t2.camp == "enemy":
+						if t2.is_commander:
+							_adjust_morale(20, -30)
+						else:
+							_adjust_morale(5, -5)
+					elif t2.camp == "player":
+						_adjust_morale(-15, 10)
 					# 吕布暴怒：我方单位倒下，吕布越战越狂（多打少）
 					if t2.camp == "player" and chapter_id == "chapter2":
 						var lubu := _unit_by_id("lubu")
@@ -1667,6 +1715,23 @@ func _apply_events(events: Array) -> void:
 							lubu.add_rage()
 							info_label.text += "\n吕布暴怒！攻击力暴涨！(×1.5)"
 							_play_dialog("ch2_lubu_rage")
+			"iron_skin":
+				var tar := _unit_by_id(ev.target)
+				if tar:
+					_spawn_float_text(tar.cell, "🛡️ 铁皮防弹！刀枪不入！", Color(1.0, 0.85, 0.2), true)
+					_spawn_banner("吕布进入【两息铁皮状态】！刀枪不入！", Color(1.0, 0.85, 0.2))
+					_shake_camera(8.0)
+					info_label.text += "\n吕布连击大成进入两息铁皮状态！物理攻击全部无效！唯有张飞战吼能震破其气脉！"
+			"iron_skin_block":
+				var tar := _unit_by_id(ev.target)
+				if tar:
+					_spawn_float_text(tar.cell, "🛡️ 铁皮防弹！免疫伤害！", Color(0.9, 0.9, 0.95), true)
+					info_label.text += "\n攻击斩在防弹铁皮上火星四溅！无法破防！伤害为 0！"
+			"iron_skin_break":
+				var tar := _unit_by_id(ev.target)
+				if tar:
+					_spawn_float_text(tar.cell, "💥 铁皮震破！气脉散乱！", Color(1.0, 0.3, 0.3), true)
+					info_label.text += "\n张飞战吼震破了吕布的铁皮气罩！吕布连击与无敌尽散！"
 			"skill":
 				info_label.text += "\n【技能】%s" % ev.get("value", "")
 			"stun":
@@ -1692,6 +1757,8 @@ func _apply_events(events: Array) -> void:
 					info_label.text += "\n%s 吸血恢复 %d HP！" % [he.name, ev.value]
 			"fx":
 				if ev.fx == "dragon_full_screen":
+					if ev.get("shatter_gate", false):
+						_break_sishui_gate()
 					_show_win_dialog()
 
 func _flash_unit(id: String, color: Color) -> void:
@@ -1982,8 +2049,48 @@ func _big_moment(text: String) -> void:
 	_spawn_banner(text, Color(1, 0.85, 0.3))
 	_shake_camera(10.0)
 
+## 汜水关城门崩塌机制：关羽满蓄力青龙斩或大军破门
+func _break_sishui_gate() -> void:
+	if gate_broken:
+		return
+	gate_broken = true
+	# 瓦解城门障碍物
+	if chapter.has("map") and chapter["map"].has("obstacles"):
+		chapter["map"]["obstacles"].clear()
+	_big_moment("💥 汜水关城门崩塌！守军阵线溃乱！")
+	_shake_camera(12.0)
+	_screen_flash(Color(1.0, 0.9, 0.3, 0.6), 0.4)
+	info_label.text += "\n💥 汜水关城门崩塌瓦解！敌军防线全线溃乱！敌军防御-20%，士气暴跌！"
+	for e in _camp_units("enemy"):
+		if e.alive:
+			e.gate_broken_debuff = true
+			_spawn_float_text(e.cell, "🛡️ 防线溃乱 DEF-20%", Color(1.0, 0.4, 0.4))
+	_adjust_morale(30, -30)
+
+## 动态士气调整系统：双方士气（0~150，基准100）
+func _adjust_morale(player_delta: int, enemy_delta: int) -> void:
+	morale.player = clampi(morale.player + player_delta, 0, 150)
+	morale.enemy = clampi(morale.enemy + enemy_delta, 0, 150)
+	MoraleCore.apply_morale(_camp_units("player"), morale.player)
+	MoraleCore.apply_morale(_camp_units("enemy"), morale.enemy)
+	_update_hud()
+	_update_dashboard()
+	if player_delta != 0:
+		info_label.text += "\n我军士气 %s%d（当前：%d）！" % ["+" if player_delta > 0 else "", player_delta, morale.player]
+	if enemy_delta != 0:
+		info_label.text += "\n敌军士气 %s%d（当前：%d）！" % ["+" if enemy_delta > 0 else "", enemy_delta, morale.enemy]
+
 ## ---------- 回合流转 ----------
 func _after_action(u) -> void:
+	# 赵云【无限耐力】：行动结束后自愈 15% HP（无需干粮）
+	var zhaoyun := _unit_by_id("zhaoyun")
+	if zhaoyun and zhaoyun.alive and (u.id == "zhaoyun" or (u.is_mounted() and u.mount.get("horse") == "zhaoyun")):
+		var healed := zhaoyun.heal_percent(0.15)
+		if healed > 0:
+			_spawn_float_text(zhaoyun.cell, "💪 无限耐力！自愈 +%d" % healed, Color(0.3, 1.0, 0.5), false)
+			_sync_node(zhaoyun)
+			info_label.text += "\n赵云体魄强健无限耐力！行动后自愈 %d HP！" % healed
+
 	# 检查胜利
 	if _check_victory():
 		return
@@ -2014,6 +2121,15 @@ func _end_player_turn() -> void:
 ## 敌方回合：每个存活敌人执行简单 AI（带演出节奏）
 func _run_enemy_turn() -> void:
 	_spawn_banner("敌方回合", Color(0.8, 0.4, 0.2))
+	# 吕布两息铁皮无敌自然到期判定（持续1轮敌我攻防，进入敌方回合前衰减）
+	for eu in _camp_units("enemy"):
+		if eu.alive and eu.iron_skin:
+			if eu.iron_skin_turns > 0:
+				eu.iron_skin_turns -= 1
+			else:
+				eu.iron_skin = false
+				_spawn_float_text(eu.cell, "🛡️ 铁皮消退", Color(0.8, 0.8, 0.8))
+				info_label.text += "\n吕布铁皮防弹持续时间已过，刀枪不入消退！"
 	for u in _camp_units("enemy"):
 		if not u.alive:
 			continue
@@ -2479,4 +2595,7 @@ func _scene_key_for_chapter() -> String:
 
 ## ---------- HUD ----------
 func _update_hud() -> void:
-	turn_label.text = "第 %d 回合 · %s" % [turn_state.turn, TurnCore.phase_name(turn_state.phase)]
+	turn_label.text = "第 %d 回合 · %s | 士气: 我方 %d vs 敌军 %d" % [
+		turn_state.turn, TurnCore.phase_name(turn_state.phase),
+		morale.player, morale.enemy
+	]

@@ -33,6 +33,10 @@ var lifesteal_active: bool = false  # 许褚裸衣吸血
 var on_hill: bool = false      # 臧霸占山为王：是否在高地
 var coward_debuff: bool = false  # 昌豨怯战：受击后DEF降低
 var morale_bonus: float = 1.0  # 士气修正倍率
+var iron_skin: bool = false      # 吕布两息铁皮无敌：免疫一切伤害
+var iron_skin_turns: int = 0     # 铁皮剩余回合数
+var zhaoyun_strike_count: int = 0 # 赵云普攻计数（每2次追加戳刺）
+var gate_broken_debuff: bool = false # 汜水关破门：敌DEF-20%
 
 # ===== 装备/词条全局加成（P0-1 修复：让抽奖真正生效）=====
 var gear_atk: int = 0      # 兵种/武器加攻
@@ -88,11 +92,13 @@ func _fangtian_multiplier() -> float:
 		return 3.0
 	return 1.0
 
-## 当前实际 DEF（含士气修正；裸衣爆甲/昌豨怯战时降低，臧霸高地时提升）
+## 当前实际 DEF（含士气修正；裸衣爆甲/昌豨怯战时降低，臧霸高地时提升，城门崩塌时降低）
 func effective_def() -> int:
 	var v: float = (float(base_def) + float(gear_def)) * morale_bonus
 	if armor_broken:
 		v *= 0.5
+	if gate_broken_debuff:
+		v *= 0.8
 	if "king_hill" in skill_ids and on_hill:
 		v *= 1.3
 	if coward_debuff:
@@ -138,20 +144,32 @@ func end_turn() -> void:
 func fangtian_strike() -> void:
 	combo_strikes += 1
 
-## 吕布被眩晕/打断：重置连击
+## 吕布被眩晕/打断：重置连击并破除铁皮无敌
 func fangtian_reset() -> void:
 	combo_strikes = 0
+	iron_skin = false
+	iron_skin_turns = 0
 
 ## 多打少暴怒：我方每死一个，吕布ATK×1.5（叠乘）
 func add_rage() -> void:
 	rage_multiplier *= 1.5
 
-## 受击
+## 受击：处于铁皮状态时免除一切伤害
 func take_damage(dmg: int) -> void:
+	if iron_skin:
+		return
 	hp -= dmg
 	if hp <= 0:
 		hp = 0
 		alive = false
+
+## 按百分比自愈生命（返回实际恢复量）
+func heal_percent(pct: float) -> int:
+	var amt: int = int(round(float(max_hp) * pct))
+	amt = mini(amt, max_hp - hp)
+	if amt > 0:
+		hp += amt
+	return amt
 
 ## 序列化（存档用）
 func to_dict() -> Dictionary:
@@ -166,6 +184,8 @@ func to_dict() -> Dictionary:
 		"alive": alive, "hua_rage_turns": hua_rage_turns,
 		"morale_bonus": morale_bonus, "refuse_penalty": refuse_penalty,
 		"mount": mount.duplicate(),
+		"iron_skin": iron_skin, "zhaoyun_strike_count": zhaoyun_strike_count,
+		"gate_broken_debuff": gate_broken_debuff,
 	}
 
 ## 是否为骑兵系（十字4向攻击，不可斜打）
