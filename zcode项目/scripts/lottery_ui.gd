@@ -346,6 +346,7 @@ func _celebration(glow_color: Color) -> void:
 	var flash := ColorRect.new()
 	flash.color = glow_color
 	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	flash.z_index = 80
 	add_child(flash)
 	var tw := create_tween()

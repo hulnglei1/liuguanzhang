@@ -943,9 +943,10 @@ func _input(event: InputEvent) -> void:
 
 		# 左键点击棋盘：
 		if event.button_index == MOUSE_BUTTON_LEFT:
-			# 双重坐标判定（兼容全屏缩放与窗口模式）
-			var mpos := get_global_mouse_position()
-			var cell := _px_to_cell(mpos)
+			# 三重坐标判定：优先使用事件原始物理坐标 event.position，回退支持 get_global_mouse_position 与 viewport 坐标
+			var cell := _px_to_cell(event.position)
+			if cell == Vector2i(-1, -1):
+				cell = _px_to_cell(get_global_mouse_position())
 			if cell == Vector2i(-1, -1):
 				cell = _px_to_cell(get_viewport().get_mouse_position())
 
@@ -2014,6 +2015,9 @@ func _on_end_turn_pressed() -> void:
 func _cancel_input() -> void:
 	input_mode = InputMode.NONE
 	selected_id = ""
+	_clear_command_menu()
+	if command_menu:
+		command_menu.visible = false
 	_clear_overlay()
 	_update_dashboard()
 
