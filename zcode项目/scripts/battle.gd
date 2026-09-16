@@ -1176,21 +1176,8 @@ func _do_skill(cell: Vector2i) -> void:
 		"seven_dash":
 			var weaves: int = mini(7, maxi(1, GridCore.manhattan(u.cell, t.cell) + 1))
 			if t:
-				_spawn_banner("七进七出！", Color(0.4, 0.8, 1.0))
-				# 残影连闪：沿路径来回
-				var path := GridCore.path(u.cell, t.cell, MAP_W, MAP_H, _blocked_cells(u.id))
-				for i in range(weaves):
-					if path.size() > 0:
-						var cell1 := path[min(i % path.size(), path.size() - 1)]
-						var orb := Polygon2D.new()
-						orb.polygon = PackedVector2Array([Vector2(-8, -8), Vector2(8, -8), Vector2(8, 8), Vector2(-8, 8)])
-						orb.position = _cell_to_px(cell1)
-						orb.color = Color(0.4, 0.8, 1.0, 0.5)
-						orb.z_index = 14
-						unit_root.add_child(orb)
-						var tw := create_tween()
-						tw.tween_property(orb, "modulate:a", 0.0, 0.2)
-						tw.tween_callback(orb.queue_free)
+				_big_moment("常山·七进七出！！")
+				_spawn_seven_dash(u.cell, t.cell, weaves)
 			events = SkillsCore.do_seven_dash(u, t, weaves)
 		"arrow_rain":
 			_spawn_banner("拐弯箭雨！", Color(0.8, 0.7, 0.3))
@@ -1429,6 +1416,80 @@ func _spawn_dragon(from_cell: Vector2i, to_cell: Vector2i) -> void:
 
 	_shake_camera(12.0)
 	_screen_flash(Color(0.2, 1.0, 0.6, 0.35), 0.3)
+
+## 常山·七进七出：交错极速银枪贯穿破阵
+func _spawn_seven_dash(from_cell: Vector2i, to_cell: Vector2i, weaves: int) -> void:
+	var start_px := _cell_to_px(from_cell)
+	var target_px := _cell_to_px(to_cell)
+	var dash_root := Node2D.new()
+	dash_root.z_index = 45
+	unit_root.add_child(dash_root)
+
+	var count: int = clampi(weaves, 3, 7)
+	for i in range(count):
+		var delay: float = float(i) * 0.05
+		var angle_offset: float = (float(i) - float(count) / 2.0) * 0.42
+		var base_dir := (target_px - start_px).normalized()
+		if base_dir.length_squared() < 0.1:
+			base_dir = Vector2.RIGHT
+		var slash_dir := base_dir.rotated(angle_offset)
+		var p1 := target_px - slash_dir * 45.0
+		var p2 := target_px + slash_dir * 52.0
+
+		var spear_line := Line2D.new()
+		spear_line.points = PackedVector2Array([p1, p1])
+		spear_line.width = 10.0 if i == count - 1 else 6.0
+		spear_line.default_color = Color(0.92, 0.97, 1.0, 0.95) if (i % 2 == 0) else Color(0.35, 0.8, 1.0, 0.9)
+		spear_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+		spear_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+		spear_line.modulate.a = 0.0
+		dash_root.add_child(spear_line)
+
+		var head := Polygon2D.new()
+		head.polygon = PackedVector2Array([
+			Vector2(14, 0), Vector2(-7, -5), Vector2(-2, 0), Vector2(-7, 5)
+		])
+		head.color = Color(1.0, 1.0, 1.0, 0.95)
+		head.position = p1
+		head.rotation = slash_dir.angle()
+		head.modulate.a = 0.0
+		dash_root.add_child(head)
+
+		var tw := create_tween()
+		tw.tween_interval(delay)
+		tw.tween_callback(func():
+			spear_line.modulate.a = 1.0
+			head.modulate.a = 1.0
+		)
+		tw.parallel().tween_method(func(val: Vector2):
+			spear_line.points = PackedVector2Array([p1, val])
+			head.position = val
+		, p1, p2, 0.08)
+		tw.parallel().tween_property(spear_line, "width", 1.5, 0.12).set_delay(0.04)
+		tw.parallel().tween_property(spear_line, "modulate:a", 0.0, 0.15).set_delay(0.07)
+		tw.parallel().tween_property(head, "modulate:a", 0.0, 0.15).set_delay(0.07)
+
+	var finish_delay: float = float(count) * 0.05
+	var shock := Polygon2D.new()
+	shock.polygon = _make_circle_polygon(34.0, 16)
+	shock.position = target_px
+	shock.color = Color(0.65, 0.88, 1.0, 0.85)
+	shock.scale = Vector2(0.2, 0.2)
+	shock.modulate.a = 0.0
+	dash_root.add_child(shock)
+
+	var tw_fin := create_tween()
+	tw_fin.tween_interval(finish_delay)
+	tw_fin.tween_callback(func():
+		shock.modulate.a = 0.85
+		_shake_camera(7.0)
+	)
+	tw_fin.tween_property(shock, "scale", Vector2(2.0, 2.0), 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw_fin.parallel().tween_property(shock, "modulate:a", 0.0, 0.22)
+	tw_fin.tween_property(dash_root, "modulate:a", 0.0, 0.18)
+	tw_fin.tween_callback(dash_root.queue_free)
+
+	_screen_flash(Color(0.5, 0.85, 1.0, 0.35), 0.25)
 
 ## 音波圈：从中心扩散的多层圆环（咆哮/范围技）
 func _spawn_shockwave(cell: Vector2i, color: Color) -> void:
