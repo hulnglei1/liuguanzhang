@@ -12,11 +12,11 @@ godot_bin/
 .godot/
 *.import
 
-# 3. 商业字体文件（防止 GitHub 字体版权爬虫扫描）
-assets/fonts/msyh.ttc
-assets/fonts/msyh.ttc.import
-assets/fonts/SimHei.ttf
-assets/fonts/SimHei.ttf.import
+# 3. 商业字体文件（防止 GitHub 字体版权爬虫扫描与超大文件）
+*.ttc
+*.ttf
+assets/fonts/
+**/assets/fonts/
 
 # 4. 小说完整原文（版权保护，严禁公开流出）
 *.txt
