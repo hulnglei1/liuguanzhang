@@ -737,6 +737,7 @@ func _make_unit_node(u) -> Node2D:
 	char_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	char_lbl.position = Vector2(-16, -15)
 	char_lbl.size = Vector2(32, 30)
+	char_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	char_lbl.add_theme_font_size_override("font_size", 17)
 	char_lbl.add_theme_color_override("font_color", Color(1, 0.98, 0.92))
 	node.add_child(char_lbl)
@@ -747,6 +748,7 @@ func _make_unit_node(u) -> Node2D:
 	bar_bg.size = Vector2(36, 5)
 	bar_bg.position = Vector2(-18, -25)
 	bar_bg.color = Color(0.1, 0.1, 0.1, 0.85)
+	bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	node.add_child(bar_bg)
 
 	var bar_fill := ColorRect.new()
@@ -754,6 +756,7 @@ func _make_unit_node(u) -> Node2D:
 	bar_fill.size = Vector2(34, 3)
 	bar_fill.position = Vector2(-17, -24)
 	bar_fill.color = Color(0.2, 0.85, 0.35)
+	bar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	node.add_child(bar_fill)
 
 	# 6. 底部名字铭牌
@@ -763,6 +766,7 @@ func _make_unit_node(u) -> Node2D:
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_lbl.position = Vector2(-36, 16)
 	name_lbl.size = Vector2(72, 16)
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	name_lbl.add_theme_font_size_override("font_size", 10)
 	name_lbl.add_theme_color_override("font_color", Color(0.95, 0.92, 0.85))
 	node.add_child(name_lbl)
@@ -773,6 +777,7 @@ func _make_unit_node(u) -> Node2D:
 	status_lbl.text = ""
 	status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_lbl.position = Vector2(-18, -39)
+	status_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	status_lbl.size = Vector2(36, 16)
 	status_lbl.add_theme_font_size_override("font_size", 11)
 	node.add_child(status_lbl)
@@ -909,27 +914,66 @@ func _sync_text(u) -> void:
 		_update_unit_visuals(u, node)
 	_update_dashboard()
 
-## ---------- 输入 ----------
-func _unhandled_input(event: InputEvent) -> void:
+## ---------- 输入交互 ----------
+func _input(event: InputEvent) -> void:
+	# 1. 剧情对白阶段：点屏幕任意空白处、点对话框、按空格/回车，均立即翻到下一句！
 	if dialog_showing:
-		if event.is_action_pressed("ui_accept") or (event is InputEventKey and event.pressed and (event.keycode == KEY_SPACE or event.keycode == KEY_ENTER)):
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			# 如果用户点击在“跳过剧情”按钮内，让跳过剧情按钮去处理
+			if dialog_skip_btn and dialog_skip_btn.is_visible_in_tree():
+				var skip_rect := dialog_skip_btn.get_global_rect()
+				if skip_rect.has_point(event.position):
+					return
 			_on_dialog_btn_pressed()
 			get_viewport().set_input_as_handled()
+			return
+		elif event.is_action_pressed("ui_accept") or (event is InputEventKey and event.pressed and (event.keycode == KEY_SPACE or event.keycode == KEY_ENTER)):
+			_on_dialog_btn_pressed()
+			get_viewport().set_input_as_handled()
+			return
 		return
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		var cell := _px_to_cell(get_global_mouse_position())
-		if cell != Vector2i(-1, -1):
-			_handle_click(cell)
+
+	# 2. 正常战棋交互阶段：
+	if event is InputEventMouseButton and event.pressed:
+		# 右键：快速取消选择/返回自由视角
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			_cancel_input()
+			get_viewport().set_input_as_handled()
+			return
+
+		# 左键点击棋盘：
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			# 双重坐标判定（兼容全屏缩放与窗口模式）
+			var mpos := get_global_mouse_position()
+			var cell := _px_to_cell(mpos)
+			if cell == Vector2i(-1, -1):
+				cell = _px_to_cell(get_viewport().get_mouse_position())
+
+			if cell != Vector2i(-1, -1):
+				_handle_click(cell)
+				get_viewport().set_input_as_handled()
 
 func _handle_click(cell: Vector2i) -> void:
 	match input_mode:
-		InputMode.NONE, InputMode.SELECT:
+		InputMode.NONE:
 			var u: BattleUnitScript = _unit_at(cell)
 			if u:
 				if u.camp == "player" and u.alive and not u.acted:
 					_select_unit(u.id)
 				else:
 					_inspect_unit(u.id)
+			else:
+				_cancel_input()
+		InputMode.SELECT:
+			var u: BattleUnitScript = _unit_at(cell)
+			if u:
+				if u.camp == "player" and u.alive and not u.acted:
+					_select_unit(u.id)
+				else:
+					_inspect_unit(u.id)
+			elif _is_in_reachable(cell):
+				# 绝妙手感：选中武将后，直接点击绿色高亮格即可直接行军！
+				_do_move(cell)
 			else:
 				_cancel_input()
 		InputMode.MOVE:
