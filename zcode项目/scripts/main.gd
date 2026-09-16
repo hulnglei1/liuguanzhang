@@ -154,6 +154,7 @@ func _build_menu() -> void:
 	nav_panel.add_child(label_status)
 
 	# 3. 四大章节战役卡片 (2行 x 2列，每张卡片 580 x 230)
+	var cleared_chapters: Array = save.get("chapters", [])
 	var cleared_set := {}
 	for ch in cleared_chapters:
 		cleared_set[ch] = true
