@@ -1262,7 +1262,16 @@ func _cmd_attack() -> void:
 func _cmd_skill() -> void:
 	input_mode = InputMode.SKILL
 	command_menu.visible = false
-	info_label.text = "点技能目标"
+	_clear_overlay()
+	var u: BattleUnitScript = _unit_by_id(selected_id)
+	if u and "dragon_slash" in u.skill_ids:
+		info_label.text = "【青龙偃月斩】请点击敌军目标：将斩出【前面一条线】直线贯穿巨龙，横扫整排敌军！"
+		var enemy_cells: Array[Vector2i] = []
+		for e in _camp_units("enemy"):
+			enemy_cells.append(e.cell)
+		_draw_cells(enemy_cells, Color(1.0, 0.4, 0.2, 0.45))
+	else:
+		info_label.text = "点技能目标"
 
 func _cmd_wait() -> void:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
@@ -1401,14 +1410,25 @@ func _do_skill(cell: Vector2i) -> void:
 				_spawn_float_text(u.cell, "气势未满！继续跑图蓄势(%d/10)！" % u.charge, Color(0.4, 0.85, 0.9))
 				_select_unit(u.id)
 				return
-			# 满蓄力大招演出：天地变色 + 百丈真龙 + 城关轰塌
+			# 满蓄力大招演出：天地变色 + 百丈真龙 + 直线贯穿前面一条线 + 城关轰塌
+			var line_path: Array[Vector2i] = GridCore.line_cells(u.cell, t.cell, 12, MAP_W, MAP_H)
+			var pierced_targets: Array = []
+			for l_cell in line_path:
+				var pu: BattleUnitScript = _unit_at(l_cell)
+				if pu and pu.alive and pu.camp != u.camp and pu.id != t.id:
+					pierced_targets.append(pu)
+
 			_big_moment("🐉 劈山裂城 · 千里青龙偃月斩！！")
-			_spawn_float_text(u.cell, "💥 汜水关城墙崩塌！诸侯皆被整麻了！", Color(0.2, 1.0, 0.45), true)
+			var hit_desc := "💥 直线贯穿！" if pierced_targets.size() > 0 else "💥 劈山裂城！"
+			_spawn_float_text(u.cell, hit_desc + "汜水关城墙崩塌！诸侯皆被整麻了！", Color(0.2, 1.0, 0.45), true)
 			_shake_camera(6.0)
 			if t:
-				_spawn_dragon(u.cell, t.cell, 10)
+				var far_cell: Vector2i = line_path.back() if line_path.size() > 0 else t.cell
+				_spawn_dragon(u.cell, far_cell, 10)
 				_spawn_burst(t.cell, Color(0.2, 1.0, 0.45, 0.6), 3)
-			events = SkillsCore.do_dragon_slash(u, t)
+				for pt in pierced_targets:
+					_spawn_burst(pt.cell, Color(0.2, 1.0, 0.45, 0.4), 2)
+			events = SkillsCore.do_dragon_slash(u, t, pierced_targets)
 		"roar":
 			_spawn_banner("燕人咆哮！", Color(0.9, 0.7, 0.2))
 			_spawn_float_text(u.cell, "这一嗓子，你忍一下！", Color(1.0, 0.85, 0.2), true)

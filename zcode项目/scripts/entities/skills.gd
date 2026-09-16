@@ -66,9 +66,9 @@ static func do_attack(caster, target) -> Array:
 		ev.append({"type": "death", "target": target.id})
 	return ev
 
-## 结算【蓄力龙斩】（关羽）
-## 消耗当前蓄力格数，返回事件数组；满蓄力(>=max)触发全屏青龙+击退
-static func do_dragon_slash(caster, target) -> Array:
+## 结算【蓄力龙斩】（关羽）：直线贯穿巨龙斩
+## 消耗当前蓄力格数，返回事件数组；主目标承受 100% 满额伤害，直线贯穿沿线敌军承受 75% 刀气贯穿伤害
+static func do_dragon_slash(caster, target, pierced_targets: Array = []) -> Array:
 	var mult: float = CombatCore.dragon_charge_multiplier(caster.charge)
 	var full: bool = caster.charge >= 10
 	var dmg: int = CombatCore.damage(caster.effective_atk(), mult, target.effective_def())
@@ -79,14 +79,26 @@ static func do_dragon_slash(caster, target) -> Array:
 		CombatCore.make_damage_event(target.id, dmg, false),
 	]
 	if full:
-		ev.append({"type": "fx", "fx": "dragon_full_screen", "target": target.id})
+		ev.append({"type": "fx", "fx": "dragon_full_screen", "target": target.id, "shatter_gate": true})
 		# 击退2格（简化：直接标记，渲染层处理位移）
 		ev.append({"type": "knockback", "target": target.id, "cells": 2})
+	if not target.alive:
+		ev.append({"type": "death", "target": target.id})
+
+	# 直线贯穿射线沿途波及的所有敌方单位
+	for pt in pierced_targets:
+		if pt != null and pt.alive and pt.id != target.id:
+			var p_dmg: int = max(int(round(float(dmg) * 0.75)), 1)
+			pt.take_damage(p_dmg)
+			ev.append(CombatCore.make_damage_event(pt.id, p_dmg, false))
+			if full:
+				ev.append({"type": "knockback", "target": pt.id, "cells": 1})
+			if not pt.alive:
+				ev.append({"type": "death", "target": pt.id})
+
 	# 消耗蓄力、进入冷却
 	caster.charge = 0
 	caster.start_cd("dragon_slash", meta("dragon_slash").cd)
-	if not target.alive:
-		ev.append({"type": "death", "target": target.id})
 	return ev
 
 ## 结算【断桥怒吼】（张飞）

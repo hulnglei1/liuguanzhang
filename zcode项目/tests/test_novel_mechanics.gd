@@ -1,4 +1,4 @@
-﻿extends SceneTree
+extends SceneTree
 ## 原著核心机制测试：关羽多回合逃窜蓄力 · 青龙四阶蜕变 · 受击打断
 ## 运行：.\godot_bin\Godot_v4.3-stable_win64_console.exe --path game --headless -s tests/test_novel_mechanics.gd
 
@@ -52,6 +52,30 @@ func _init() -> void:
 		failed += 1
 	else:
 		print("  ✅ [PASS] 关羽遭受敌击，气脉震荡中断 3 格蓄力（8 -> 5），需队友护卫！")
+
+	# 3. 验证【前面一条线】直线贯穿伤害判定
+	const GridCore := preload("res://scripts/core/grid.gd")
+	var line := GridCore.line_cells(Vector2i(2, 5), Vector2i(10, 5), 10, 12, 10)
+	if line.size() < 8 or line[0] != Vector2i(3, 5) or line[7] != Vector2i(10, 5):
+		printerr("[FAIL] 直线贯穿射线计算错误: ", line)
+		failed += 1
+	else:
+		print("  ✅ [PASS] 直线贯穿射线计算正确，覆盖前面一整条线: ", line[0], " -> ", line[-1])
+
+	# 验证直线上的主目标与穿透目标双重结算
+	guanyu.charge = 10
+	var huaxiong = BattleUnitScript.from_data({"id":"huaxiong","name":"华雄","cls":"骑兵","camp":"enemy","hp":70,"atk":26,"def":10,"mov":4,"rng":1,"skills":["hua_rage"]}, Vector2i(10, 5))
+	var dao_bing = BattleUnitScript.from_data({"id":"dao_bing_1","name":"刀兵","cls":"步兵","camp":"enemy","hp":40,"atk":16,"def":8,"mov":3,"rng":1,"skills":[]}, Vector2i(6, 5))
+	
+	var evs := SkillsCore.do_dragon_slash(guanyu, huaxiong, [dao_bing])
+	if huaxiong.alive:
+		printerr("[FAIL] 主目标华雄应被一刀斩杀！")
+		failed += 1
+	elif dao_bing.alive:
+		printerr("[FAIL] 沿途刀兵应被青龙直线贯穿秒杀！")
+		failed += 1
+	else:
+		print("  ✅ [PASS] 劈山裂城青龙斩直线贯穿！华雄(95伤)与挡路刀兵(71伤)全排秒杀！")
 
 	print("\n==== 测试结果: 失败 %d 项 ====" % failed)
 	quit(failed)
