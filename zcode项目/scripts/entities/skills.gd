@@ -10,7 +10,7 @@ const GridCore := preload("res://scripts/core/grid.gd")
 const SKILL_META := {
 	"dragon_slash": {
 		"name": "蓄力龙斩", "cd": 3, "charge_type": "move",
-		"max_charge": 10, "desc": "移动格数=蓄力，满蓄力全屏青龙",
+		"max_charge": 10, "desc": "上下左右定向挥刀，贯穿被击点及后方直线，射程随蓄力暴涨",
 	},
 	"roar": {
 		"name": "断桥怒吼", "cd": 4, "charge_type": "wait",
@@ -66,8 +66,8 @@ static func do_attack(caster, target) -> Array:
 		ev.append({"type": "death", "target": target.id})
 	return ev
 
-## 结算【蓄力龙斩】（关羽）：直线贯穿巨龙斩
-## 消耗当前蓄力格数，返回事件数组；主目标承受 100% 满额伤害，直线贯穿沿线敌军承受 75% 刀气贯穿伤害
+## 结算【蓄力龙斩】（关羽）：被攻击点及身后贯穿巨龙斩
+## 消耗当前蓄力格数，返回事件数组；主目标（被攻击点）承受 100% 满额伤害，被攻击点身后沿线贯穿敌军承受 70% 刀气贯穿伤害
 static func do_dragon_slash(caster, target, pierced_targets: Array = []) -> Array:
 	var mult: float = CombatCore.dragon_charge_multiplier(caster.charge)
 	var full: bool = caster.charge >= 10
@@ -80,15 +80,14 @@ static func do_dragon_slash(caster, target, pierced_targets: Array = []) -> Arra
 	]
 	if full:
 		ev.append({"type": "fx", "fx": "dragon_full_screen", "target": target.id, "shatter_gate": true})
-		# 击退2格（简化：直接标记，渲染层处理位移）
 		ev.append({"type": "knockback", "target": target.id, "cells": 2})
 	if not target.alive:
 		ev.append({"type": "death", "target": target.id})
 
-	# 直线贯穿射线沿途波及的所有敌方单位
+	# 被攻击点身后直线贯穿沿途波及的敌军
 	for pt in pierced_targets:
 		if pt != null and pt.alive and pt.id != target.id:
-			var p_dmg: int = max(int(round(float(dmg) * 0.75)), 1)
+			var p_dmg: int = max(int(round(float(dmg) * 0.70)), 1)
 			pt.take_damage(p_dmg)
 			ev.append(CombatCore.make_damage_event(pt.id, p_dmg, false))
 			if full:

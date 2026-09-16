@@ -218,16 +218,16 @@ func _build_weapon_card() -> void:
 	add_child(card)
 
 	var title := Label.new()
-	title.text = "⚔️ 天工神兵池 · 诸侯战栗"
+	title.text = "⚡ 诸天神物池 · 原著宝库"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 20)
-	title.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5))
+	title.add_theme_color_override("font_color", Color(1.0, 0.7, 0.4))
 	title.position = Vector2(20, 14)
 	title.size = Vector2(540, 28)
 	card.add_child(title)
 
 	var desc := Label.new()
-	desc.text = "锻铸稀世神甲与爆笑杀器，解锁强悍装备属性与范围绝杀战技"
+	desc.text = "抽取原著穿越专属降维宝物：现代防暴电棍、微缩东风、高音大喇叭与军大衣！"
 	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc.add_theme_font_size_override("font_size", 12)
 	desc.add_theme_color_override("font_color", Color(0.85, 0.7, 0.7))
@@ -244,7 +244,7 @@ func _build_weapon_card() -> void:
 		row.add_theme_stylebox_override("panel", _create_box_style(Color(0.08, 0.04, 0.05, 0.8), Color(0.5, 0.22, 0.25), 6, 1))
 		card.add_child(row)
 
-		var icon_str := "🛡️" if item.id == "jinggang_dou" else ("💥" if item.id == "da_he_dan" else ("🚀" if item.id == "shi_tou" else "🧿"))
+		var icon_str := "⚡" if item.id == "electric_baton" else ("🚀" if item.id == "dongfeng" else ("📢" if item.id == "megaphone" else "🧥"))
 		var lbl_name := Label.new()
 		lbl_name.text = "%s  %s" % [icon_str, item.name]
 		lbl_name.add_theme_font_size_override("font_size", 15)

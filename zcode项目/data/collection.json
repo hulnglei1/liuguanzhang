@@ -14,7 +14,7 @@
     {"id": "caocao", "name": "曹操", "desc": "钞能力玩家，『这还不阴？』"}
   ],
   "skills": [
-    {"id": "dragon_slash", "name": "蓄力龙斩", "desc": "关羽：移动格数=威力，满蓄力全屏青龙"},
+    {"id": "dragon_slash", "name": "蓄力龙斩", "desc": "关羽：移动格数=威力，朝上下左右四向贯穿巨龙斩"},
     {"id": "roar", "name": "断桥怒吼", "desc": "张飞：蓄力轮数=威力，满蓄力眩晕"},
     {"id": "seven_dash", "name": "七进七出", "desc": "赵云：穿人多段突刺"},
     {"id": "hua_rage", "name": "虎牢狂力", "desc": "华雄：每回合ATK+15%"},

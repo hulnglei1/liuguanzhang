@@ -22,6 +22,9 @@ const MAP_H := 10
 ## 当前要加载的章节 id（由 main.gd 设置）："chapter1" / "chapter2"
 static var chapter_id: String = "chapter1"
 
+static func set_chapter_id(id: String) -> void:
+	chapter_id = id
+
 ## ---------- 场景节点引用（battle.tscn 中定义） ----------
 @onready var map_root: Node2D = $MapRoot
 @onready var unit_root: Node2D = $UnitRoot
@@ -81,11 +84,13 @@ var refuse_penalty_active := false
 var victory := false
 
 # 输入状态机
-enum InputMode { NONE, SELECT, MOVE, ATTACK, SKILL }
+enum InputMode { NONE, SELECT, MOVE, ATTACK, SKILL, POST_MOVE }
 var input_mode := InputMode.NONE
 var selected_id := ""
 var move_target: Vector2i
 var skill_target: Vector2i
+var move_origin_cell: Vector2i = Vector2i(-1, -1)
+var move_gained_charge: int = 0
 var pending_dialog: Array = []      # 待播对话队列
 var dialog_showing := false
 var queued_events: Array = []       # 已触发过一次的事件 key
@@ -149,7 +154,7 @@ func _show_help() -> void:
 	_set_dialog_visible(true)
 	_show_next_dialog_line()
 
-## P0-1：读取背包装备/种子，应用到全局战斗加成（让抽奖真正生效）
+## 读取背包装备/种子，应用到全局战斗加成（原著神物与仙种生效）
 func _apply_gear_bonuses() -> void:
 	var save := SaveCore.load_state()
 	var inv: Dictionary = save.get("inventory", {})
@@ -160,23 +165,10 @@ func _apply_gear_bonuses() -> void:
 	var atk_pct := 1.0
 	var hp_regen := 0
 	var morale_start_extra := 0
-	# 武器池
-	var weapons := {
-		"jinggang_dou": {"def": 6},
-		"gu_shou": {"hp": 40},
-		"da_he_dan": {"atk": 0, "aoe": true},
-		"shi_tou": {"atk": 0, "full_screen": true},
-	}
-	for item_id in inv:
-		var cnt: int = inv[item_id]
-		if cnt <= 0:
-			continue
-		var w = weapons.get(item_id, {})
-		if w.has("def"):
-			add_def += int(w.def) * cnt
-		if w.has("hp"):
-			add_hp += int(w.hp) * cnt
-	# 种子池（单项buff，取有即用）
+	# 原著专属神兵防具
+	if inv.has("military_coat"):
+		add_def += 15 * int(inv["military_coat"])
+	# 仙种（原著单项buff）
 	if inv.has("sweet_potato"):
 		atk_pct = 1.0 + 0.10 * inv["sweet_potato"]
 	if inv.has("corn"):
@@ -608,7 +600,7 @@ func _update_dashboard() -> void:
 		var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
 		dash_gimmick_title.text = "🐉 千里青龙势 · %s" % dt.name
 		dash_gimmick_title.add_theme_color_override("font_color", dt.color)
-		dash_gimmick_desc.text = "多回合逃窜蓄势: %d/10格 (倍率 %.1fx)\n💡 绕场跑图叠气势！受击气乱扣3格！满10格【劈山裂城】一击必杀！" % [u.charge, CombatCore.dragon_charge_multiplier(u.charge)]
+		dash_gimmick_desc.text = "多回合逃窜蓄势: %d/10格 (倍率 %.1fx)\n💡 绕场跑图叠气势！受击气脉震散直接清零！满10格【劈山裂城】一击必杀！" % [u.charge, CombatCore.dragon_charge_multiplier(u.charge)]
 		dash_gimmick_bar.value = u.charge * 10
 	elif "roar" in u.skill_ids:
 		dash_gimmick_title.text = "⚡ 燕人咆哮 (怒吼蓄力)"
@@ -944,6 +936,15 @@ func _input(event: InputEvent) -> void:
 
 		# 左键点击棋盘：
 		if event.button_index == MOUSE_BUTTON_LEFT:
+			# 曹操传贴身气泡菜单：若鼠标点击落在命令菜单内，放行给 UI 按钮响应，严禁拦截！
+			if command_menu.visible:
+				var m_rect: Rect2 = command_menu.get_global_rect()
+				for child in command_menu.get_children():
+					if child is Control:
+						m_rect = m_rect.merge(child.get_global_rect())
+				if m_rect.has_point(event.position) or m_rect.has_point(get_global_mouse_position()):
+					return
+
 			# 三重坐标判定：优先使用事件原始物理坐标 event.position，回退支持 get_global_mouse_position 与 viewport 坐标
 			var cell := _px_to_cell(event.position)
 			if cell == Vector2i(-1, -1):
@@ -969,12 +970,19 @@ func _handle_click(cell: Vector2i) -> void:
 		InputMode.SELECT:
 			var u: BattleUnitScript = _unit_at(cell)
 			if u:
-				if u.camp == "player" and u.alive and not u.acted:
+				if u.id == selected_id:
+					# 再次点击已选中的武将自身：原地待命，在身旁弹出指令气泡
+					_clear_overlay()
+					_show_command_menu()
+				elif u.camp == "player" and u.alive and not u.acted:
 					_select_unit(u.id)
+				elif _is_in_attack_range(cell):
+					# 战棋便捷交互：直接点击射程内敌军，原地发动攻击！
+					_do_attack(cell)
 				else:
 					_inspect_unit(u.id)
 			elif _is_in_reachable(cell):
-				# 绝妙手感：选中武将后，直接点击绿色高亮格即可直接行军！
+				# 曹操传经典手感：直接点击高亮绿格进行行军！走到目标格后再在身旁弹出指令气泡！
 				_do_move(cell)
 			else:
 				_cancel_input()
@@ -990,6 +998,13 @@ func _handle_click(cell: Vector2i) -> void:
 				_show_command_menu()
 		InputMode.SKILL:
 			if _is_in_skill_range(cell):
+				_do_skill(cell)
+			else:
+				_show_command_menu()
+		InputMode.POST_MOVE:
+			if _is_in_attack_range(cell):
+				_do_attack(cell)
+			elif _is_in_skill_range(cell):
 				_do_skill(cell)
 			else:
 				_show_command_menu()
@@ -1027,7 +1042,8 @@ func _select_unit(id: String) -> void:
 	_draw_cells(reach.keys(), Color(0.2, 0.8, 0.4, 0.35))
 	input_mode = InputMode.SELECT
 	_update_dashboard()
-	_show_command_menu()
+	_clear_command_menu()
+	command_menu.visible = false
 
 func _max_charge_for(u) -> int:
 	if u.skill_ids.size() > 0:
@@ -1045,100 +1061,130 @@ func _show_command_menu() -> void:
 	if u == null or not u.alive or dialog_showing or u.camp != "player" or u.acted:
 		command_menu.visible = false
 		return
-	input_mode = InputMode.SELECT
+	input_mode = InputMode.POST_MOVE if move_origin_cell != Vector2i(-1, -1) else InputMode.SELECT
 	command_menu.visible = true
 
+	# 曹操传风格贴身浮动弹窗：定位在角色身旁
+	var cell_px := _cell_to_px(u.cell)
+	var menu_w: float = 144.0
+	var menu_x: float = cell_px.x + TILE / 2.0 + 8.0
+	if menu_x + menu_w > 640.0:
+		menu_x = cell_px.x - TILE / 2.0 - menu_w - 8.0
+	if menu_x < 10.0:
+		menu_x = 10.0
+	var menu_y: float = clampf(cell_px.y - 48.0, 70.0, 460.0)
+	command_menu.position = Vector2(menu_x, menu_y)
+
+	var bubble_panel := PanelContainer.new()
+	var bubble_sb := StyleBoxFlat.new()
+	bubble_sb.bg_color = Color(0.08, 0.10, 0.14, 0.96)
+	bubble_sb.border_color = Color(0.9, 0.78, 0.35, 1.0)
+	bubble_sb.set_border_width_all(2)
+	bubble_sb.set_corner_radius_all(6)
+	bubble_sb.content_margin_left = 6
+	bubble_sb.content_margin_right = 6
+	bubble_sb.content_margin_top = 6
+	bubble_sb.content_margin_bottom = 6
+	bubble_panel.add_theme_stylebox_override("panel", bubble_sb)
+	command_menu.add_child(bubble_panel)
+
+	var list_vbox := VBoxContainer.new()
+	list_vbox.add_theme_constant_override("separation", 5)
+	bubble_panel.add_child(list_vbox)
+
 	var title_lbl := Label.new()
-	title_lbl.text = "🎮 军令指示 · %s" % u.name
-	title_lbl.add_theme_font_size_override("font_size", 15)
+	title_lbl.text = "【%s】" % u.name
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_lbl.add_theme_font_size_override("font_size", 13)
 	title_lbl.add_theme_color_override("font_color", Color(0.95, 0.85, 0.5))
-	command_menu.add_child(title_lbl)
+	list_vbox.add_child(title_lbl)
 
-	var row_grid := GridContainer.new()
-	row_grid.columns = 2
-	row_grid.add_theme_constant_override("h_separation", 10)
-	row_grid.add_theme_constant_override("v_separation", 8)
-	command_menu.add_child(row_grid)
-
-	# 1. 移动
-	var btn_move := Button.new()
-	btn_move.custom_minimum_size = Vector2(265, 42)
-	btn_move.text = "👟 战术移动 (%d格)" % _get_unit_mov(u)
-	btn_move.pressed.connect(_cmd_move)
-	row_grid.add_child(btn_move)
-
-	# 2. 攻击
+	# 1. 攻击
 	var can_atk := _has_attackable_target(u)
 	var btn_atk := Button.new()
-	btn_atk.custom_minimum_size = Vector2(265, 42)
+	btn_atk.custom_minimum_size = Vector2(136, 34)
 	btn_atk.text = "⚔️ 普通攻击"
 	btn_atk.disabled = not can_atk
 	btn_atk.pressed.connect(_cmd_attack)
-	row_grid.add_child(btn_atk)
+	list_vbox.add_child(btn_atk)
 
-	# 3. 技能
+	# 2. 绝技
 	if u.skill_ids.size() > 0:
 		var skill_id: String = u.skill_ids[0]
 		var ready := u.skill_ready(skill_id)
 		var skill_name: String = SkillsCore.meta(skill_id).get("name", "绝技")
 		var btn_skill := Button.new()
-		btn_skill.custom_minimum_size = Vector2(265, 42)
+		btn_skill.custom_minimum_size = Vector2(136, 34)
 		if skill_id == "dragon_slash":
-			btn_skill.text = "✨ %s (%d/10)" % [skill_name, u.charge]
+			btn_skill.text = "✨ 龙斩(%d/10)" % u.charge
 		else:
-			btn_skill.text = "✨ %s%s" % [skill_name, "" if ready else " (CD中)"]
+			btn_skill.text = "✨ %s%s" % [skill_name, "" if ready else "(CD)"]
 		btn_skill.disabled = not ready or not _has_skill_target(u, skill_id)
 		btn_skill.pressed.connect(_cmd_skill)
-		row_grid.add_child(btn_skill)
+		list_vbox.add_child(btn_skill)
 
-	# 4. 待机/蓄力
+	# 3. 待机/蓄力
 	var btn_wait := Button.new()
-	btn_wait.custom_minimum_size = Vector2(265, 42)
+	btn_wait.custom_minimum_size = Vector2(136, 34)
 	if "roar" in u.skill_ids:
-		btn_wait.text = "🛡️ 待机 / 蓄力 (%d/3)" % u.charge
+		btn_wait.text = "🛡️ 蓄力(%d/3)" % u.charge
 	else:
 		btn_wait.text = "🛡️ 待机休整"
 	btn_wait.pressed.connect(_cmd_wait)
-	row_grid.add_child(btn_wait)
+	list_vbox.add_child(btn_wait)
 
-	# 5. 战术合体或解除合体
+	# 4. 移动后撤回 / 未移动取消
+	if move_origin_cell != Vector2i(-1, -1):
+		var btn_undo := Button.new()
+		btn_undo.custom_minimum_size = Vector2(136, 34)
+		btn_undo.text = "↩️ 撤回移动"
+		btn_undo.add_theme_color_override("font_color", Color(0.4, 0.9, 1.0))
+		btn_undo.pressed.connect(_cmd_undo_move)
+		list_vbox.add_child(btn_undo)
+	else:
+		var btn_cancel := Button.new()
+		btn_cancel.custom_minimum_size = Vector2(136, 34)
+		btn_cancel.text = "❌ 取消指令"
+		btn_cancel.pressed.connect(_cancel_input)
+		list_vbox.add_child(btn_cancel)
+
+	# 5. 合体 / 解除合体
 	if u.is_mounted():
 		var btn_unmount := Button.new()
-		btn_unmount.custom_minimum_size = Vector2(265, 42)
-		btn_unmount.text = "🏇 解除合体 (步骑分离)"
+		btn_unmount.custom_minimum_size = Vector2(136, 34)
+		btn_unmount.text = "🏇 解除合体"
 		btn_unmount.pressed.connect(_cmd_unmount)
-		row_grid.add_child(btn_unmount)
+		list_vbox.add_child(btn_unmount)
 	else:
 		var mount_target := _find_mountable_target(u)
 		if mount_target != null:
 			var btn_mount := Button.new()
-			btn_mount.custom_minimum_size = Vector2(265, 42)
-			btn_mount.text = "🐎 战术合体 (骑乘%s)" % mount_target.name
+			btn_mount.custom_minimum_size = Vector2(136, 34)
+			btn_mount.text = "🐎 战术合体"
 			btn_mount.pressed.connect(_cmd_mount.bind(mount_target))
-			row_grid.add_child(btn_mount)
+			list_vbox.add_child(btn_mount)
 
-	# 6. 背包军备神兵主动施放
+	# 6. 原著神兵 / 军备
 	var save := SaveCore.load_state()
 	var inv: Dictionary = save.get("inventory", {})
-	if int(inv.get("dahuangdan", 0)) > 0:
-		var btn_dan := Button.new()
-		btn_dan.custom_minimum_size = Vector2(265, 42)
-		btn_dan.text = "💊 传世大黄丹 (剩%d/回满血)" % int(inv["dahuangdan"])
-		btn_dan.pressed.connect(_cmd_use_dahuangdan)
-		row_grid.add_child(btn_dan)
+	if int(inv.get("electric_baton", 0)) > 0:
+		var btn_baton := Button.new()
+		btn_baton.custom_minimum_size = Vector2(136, 34)
+		btn_baton.text = "⚡ 电棍(%d)" % int(inv["electric_baton"])
+		btn_baton.pressed.connect(_cmd_use_electric_baton)
+		list_vbox.add_child(btn_baton)
 	if int(inv.get("dongfeng", 0)) > 0:
 		var btn_wind := Button.new()
-		btn_wind.custom_minimum_size = Vector2(265, 42)
-		btn_wind.text = "💨 借微缩东风 (剩%d/击退)" % int(inv["dongfeng"])
+		btn_wind.custom_minimum_size = Vector2(136, 34)
+		btn_wind.text = "💨 借东风(%d)" % int(inv["dongfeng"])
 		btn_wind.pressed.connect(_cmd_use_dongfeng)
-		row_grid.add_child(btn_wind)
-
-	# 7. 取消指令
-	var btn_cancel := Button.new()
-	btn_cancel.custom_minimum_size = Vector2(265, 42)
-	btn_cancel.text = "❌ 取消指令"
-	btn_cancel.pressed.connect(_cancel_input)
-	row_grid.add_child(btn_cancel)
+		list_vbox.add_child(btn_wind)
+	if int(inv.get("dahuangdan", 0)) > 0:
+		var btn_dan := Button.new()
+		btn_dan.custom_minimum_size = Vector2(136, 34)
+		btn_dan.text = "💊 大黄丹(%d)" % int(inv["dahuangdan"])
+		btn_dan.pressed.connect(_cmd_use_dahuangdan)
+		list_vbox.add_child(btn_dan)
 
 func _find_mountable_target(u) -> BattleUnitScript:
 	for other in units:
@@ -1172,7 +1218,7 @@ func _cmd_unmount() -> void:
 				horse_node.visible = true
 			var found_cell: Vector2i = Vector2i(-1, -1)
 			for d in GridCore.DIRS4:
-				var adj := u.cell + d
+				var adj: Vector2i = u.cell + d
 				if GridCore.in_bounds(adj, MAP_W, MAP_H) and adj not in _blocked_cells(""):
 					found_cell = adj
 					break
@@ -1201,6 +1247,40 @@ func _cmd_unmount() -> void:
 			_sync_text(horse)
 			_show_command_menu()
 
+func _cmd_use_electric_baton() -> void:
+	var u: BattleUnitScript = _unit_by_id(selected_id)
+	if u and u.alive:
+		var target: BattleUnitScript = null
+		for d in GridCore.DIRS4:
+			var check := _unit_at(u.cell + d)
+			if check and check.alive and check.camp != u.camp:
+				target = check
+				break
+		if target:
+			var save := SaveCore.load_state()
+			var inv: Dictionary = save.get("inventory", {})
+			if int(inv.get("electric_baton", 0)) > 0:
+				inv["electric_baton"] = int(inv["electric_baton"]) - 1
+				save["inventory"] = inv
+				SaveCore.save_state(save)
+				target.take_damage(10)
+				target.stun_turns = maxi(target.stun_turns, 1)
+				_clear_overlay()
+				command_menu.visible = false
+				_screen_flash(Color(0.2, 0.9, 1.0, 0.4), 0.25)
+				_spawn_burst(target.cell, Color(0.2, 0.9, 1.0), 3)
+				_spawn_float_text(target.cell, "⚡ 滋滋滋！高压电击抽搐眩晕！(-10)", Color(0.2, 0.9, 1.0), true)
+				info_label.text = "【%s】掏出防暴电棍！【%s】被电得外焦里嫩、浑身抽搐强行眩晕！" % [u.name, target.name]
+				_sync_text(target)
+				if not target.alive:
+					_unit_node_hide(target.id)
+				u.acted = true
+				move_origin_cell = Vector2i(-1, -1)
+				move_gained_charge = 0
+				_after_action(u)
+		else:
+			info_label.text = "防暴电棍攻击距离仅为近身1格！周围上下左右未发现敌军！"
+
 func _cmd_use_dahuangdan() -> void:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
 	if u and u.alive:
@@ -1216,6 +1296,8 @@ func _cmd_use_dahuangdan() -> void:
 			_spawn_float_text(u.cell, "💊 大黄丹金丹回天！HP回满！", Color(1.0, 0.85, 0.2), true)
 			info_label.text = "【%s】吞服传世大黄丹！气血瞬间全满！" % u.name
 			u.acted = true
+			move_origin_cell = Vector2i(-1, -1)
+			move_gained_charge = 0
 			_after_action(u)
 
 func _cmd_use_dongfeng() -> void:
@@ -1227,14 +1309,42 @@ func _cmd_use_dongfeng() -> void:
 			inv["dongfeng"] = int(inv["dongfeng"]) - 1
 			save["inventory"] = inv
 			SaveCore.save_state(save)
-			var ev := SkillsCore.do_use_dongfeng(u, units)
-			_apply_events(ev)
-			_spawn_shockwave(u.cell, Color(0.4, 0.9, 1.0))
-			_screen_flash(Color(0.6, 0.9, 1.0, 0.35), 0.2)
-			_spawn_float_text(u.cell, "💨 借东风狂飙！全场击退！", Color(0.4, 0.9, 1.0), true)
-			info_label.text = "【%s】祭起微缩版东风！狂风呼啸，周围敌军被震退！" % u.name
+			_clear_overlay()
+			command_menu.visible = false
+			_big_moment("🚀 东风快递 · 使命必达！！")
+			_screen_flash(Color(1.0, 0.5, 0.2, 0.5), 0.4)
+			_shake_camera(8.0)
+			for e in _camp_units("enemy"):
+				if e.alive:
+					e.take_damage(40)
+					_spawn_burst(e.cell, Color(1.0, 0.4, 0.1), 3)
+					_spawn_float_text(e.cell, "💥 弹道轰炸 -40！", Color(1.0, 0.5, 0.2), true)
+					_sync_text(e)
+					if not e.alive:
+						_unit_node_hide(e.id)
+			info_label.text = "【%s】呼叫微缩版东风！巡航火箭呼啸掠空，敌阵全图轰鸣！" % u.name
 			u.acted = true
+			move_origin_cell = Vector2i(-1, -1)
+			move_gained_charge = 0
 			_after_action(u)
+
+func _cmd_undo_move() -> void:
+	var u: BattleUnitScript = _unit_by_id(selected_id)
+	if u and move_origin_cell != Vector2i(-1, -1):
+		u.cell = move_origin_cell
+		_sync_node(u)
+		if u.is_mounted() and u.mount.has("horse"):
+			var horse := _unit_by_id(u.mount["horse"])
+			if horse:
+				horse.cell = u.cell
+				_sync_node(horse)
+		if "dragon_slash" in u.skill_ids:
+			u.charge = maxi(0, u.charge - move_gained_charge)
+		move_origin_cell = Vector2i(-1, -1)
+		move_gained_charge = 0
+		_sync_text(u)
+		info_label.text = "已撤回移动，【%s】回到原位。" % u.name
+		_select_unit(u.id)
 
 func _has_attackable_target(u) -> bool:
 	for t in units:
@@ -1243,7 +1353,15 @@ func _has_attackable_target(u) -> bool:
 	return false
 
 func _has_skill_target(u, skill_id: String) -> bool:
-	# 龙斩/范围技：若场上有敌方即可；单体近战技看是否有敌在技能范围
+	if skill_id == "dragon_slash":
+		for d in GridCore.DIRS4:
+			var c: Vector2i = u.cell + d
+			var enemy := _unit_at(c)
+			if enemy and enemy.alive and enemy.camp != u.camp:
+				return true
+		return false
+	elif skill_id == "naked_armor":
+		return true
 	for t in units:
 		if t.alive and t.camp != u.camp:
 			return true
@@ -1257,7 +1375,15 @@ func _cmd_move() -> void:
 func _cmd_attack() -> void:
 	input_mode = InputMode.ATTACK
 	command_menu.visible = false
-	info_label.text = "点要攻击的敌人（红色格）"
+	_clear_overlay()
+	var u: BattleUnitScript = _unit_by_id(selected_id)
+	if u:
+		var targets: Array[Vector2i] = []
+		for t in units:
+			if t.alive and t.camp != u.camp and GridCore.chebyshev(u.cell, t.cell) <= u.rng:
+				targets.append(t.cell)
+		_draw_cells(targets, Color(0.95, 0.25, 0.2, 0.5))
+		info_label.text = "点红框内的敌军发动攻击"
 
 func _cmd_skill() -> void:
 	input_mode = InputMode.SKILL
@@ -1265,11 +1391,16 @@ func _cmd_skill() -> void:
 	_clear_overlay()
 	var u: BattleUnitScript = _unit_by_id(selected_id)
 	if u and "dragon_slash" in u.skill_ids:
-		info_label.text = "【青龙偃月斩】请点击敌军目标：将斩出【前面一条线】直线贯穿巨龙，横扫整排敌军！"
-		var enemy_cells: Array[Vector2i] = []
-		for e in _camp_units("enemy"):
-			enemy_cells.append(e.cell)
-		_draw_cells(enemy_cells, Color(1.0, 0.4, 0.2, 0.45))
+		var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
+		var line_len: int = int(dt.get("line_len", 1))
+		info_label.text = "【青龙偃月斩】请点击上下左右相邻敌军！刀芒将贯穿该敌军及后方 %d 格直线！" % line_len
+		var valid_cells: Array[Vector2i] = []
+		for d in GridCore.DIRS4:
+			var c: Vector2i = u.cell + d
+			var enemy := _unit_at(c)
+			if enemy and enemy.alive and enemy.camp != u.camp:
+				valid_cells.append(c)
+		_draw_cells(valid_cells, Color(0.95, 0.35, 0.15, 0.55))
 	else:
 		info_label.text = "点技能目标"
 
@@ -1283,6 +1414,8 @@ func _do_wait(u) -> void:
 	_clear_overlay()
 	command_menu.visible = false
 	u.acted = true
+	move_origin_cell = Vector2i(-1, -1)
+	move_gained_charge = 0
 	# 若张飞有蓄力型咆哮技能，待机=蓄力
 	if "roar" in u.skill_ids and u.charge < 3:
 		u.charge += 1
@@ -1303,42 +1436,46 @@ func _do_move(cell: Vector2i) -> void:
 	var blocked := _blocked_cells(selected_id)
 	var path := GridCore.path(u.cell, cell, MAP_W, MAP_H, blocked)
 	var moved_cells := path.size()
-	# 客户端动画：单位沿路径逐格走过去
+	move_origin_cell = u.cell
+
+	# 关羽蓄力：移动格数 = 蓄力值（骑乘效率×2）
+	if "dragon_slash" in u.skill_ids:
+		var eff := SkillsCore.mounted_charge_efficiency() if u.is_mounted() else 1
+		var old_charge: int = u.charge
+		u.charge = clampi(u.charge + moved_cells * eff, 0, 10)
+		move_gained_charge = u.charge - old_charge
+		var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
+		info_label.text = "关羽多回合逃窜蓄力 → %d/10【%s】！跑得越远，青龙越巨！" % [u.charge, dt.name]
+		if u.charge >= 10:
+			_spawn_float_text(cell, "🐉 劈山裂城！百丈真龙显圣！", Color(0.2, 1.0, 0.4), true)
+		elif u.charge >= 7:
+			_spawn_float_text(cell, "🐉 龙吟震天！百丈青龙成型！", Color(0.3, 0.9, 0.6), true)
+		elif u.charge >= 4:
+			_spawn_float_text(cell, "🐉 青龙腾云！刀芒暴涨！", Color(0.4, 0.85, 0.9), false)
+		elif u.is_mounted():
+			_spawn_float_text(cell, "赵云汗血飞驰！双倍充能！", Color(0.4, 0.9, 1.0))
+		else:
+			_spawn_float_text(cell, "马哥撑住！逃跑蓄力中！", Color(0.5, 0.8, 0.9))
+	else:
+		move_gained_charge = 0
+		info_label.text = "%s 移动到 (%d,%d)" % [u.name, cell.x, cell.y]
+
+	_clear_overlay()
 	_animate_move(u, path)
 	u.cell = cell
-	u.acted = true
-	# 若处于骑乘合体，马匹（赵云）随行同步坐标
 	if u.is_mounted() and u.mount.has("horse"):
 		var horse := _unit_by_id(u.mount["horse"])
 		if horse and horse.alive:
 			horse.cell = u.cell
 			_sync_node(horse)
 	_sync_text(u)
-	# 关羽蓄力：移动格数 = 蓄力值（骑乘效率×2）
-	if "dragon_slash" in u.skill_ids:
-		var eff := SkillsCore.mounted_charge_efficiency() if u.is_mounted() else 1
-		u.charge = clampi(u.charge + moved_cells * eff, 0, 10)
-		var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
-		info_label.text = "关羽多回合逃窜蓄力 → %d/10【%s】！跑得越远，青龙越巨！" % [u.charge, dt.name]
-		if u.charge >= 10:
-			_spawn_float_text(u.cell, "🐉 劈山裂城！百丈真龙显圣！", Color(0.2, 1.0, 0.4), true)
-		elif u.charge >= 7:
-			_spawn_float_text(u.cell, "🐉 龙吟震天！百丈青龙成型！", Color(0.3, 0.9, 0.6), true)
-		elif u.charge >= 4:
-			_spawn_float_text(u.cell, "🐉 青龙腾云！刀芒暴涨！", Color(0.4, 0.85, 0.9), false)
-		elif u.is_mounted():
-			_spawn_float_text(u.cell, "赵云汗血飞驰！双倍充能！", Color(0.4, 0.9, 1.0))
-		else:
-			_spawn_float_text(u.cell, "马哥撑住！逃跑蓄力中！", Color(0.5, 0.8, 0.9))
-	else:
-		info_label.text = "%s 移动到 (%d,%d)" % [u.name, cell.x, cell.y]
-	_clear_overlay()
 
-	# 时序对齐：等待移动动画播放完毕再执行后续结算
+	# 移动完成后进入 POST_MOVE 状态，弹出贴身指令弹窗（曹操传模式：移动后仍可攻击）
 	var move_duration: float = float(moved_cells) * 0.06
 	if move_duration > 0:
 		await get_tree().create_timer(move_duration).timeout
-	_after_action(u)
+	input_mode = InputMode.POST_MOVE
+	_show_command_menu()
 
 ## 走格动画：单位节点沿路径平滑移动
 func _animate_move(u, path: Array) -> void:
@@ -1364,6 +1501,7 @@ func _do_attack(cell: Vector2i) -> void:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
 	var t: BattleUnitScript = _unit_at(cell)
 	_clear_overlay()
+	command_menu.visible = false
 	var events := SkillsCore.do_attack(u, t)
 	_apply_events(events)
 	# 敌方反击判定：若目标仍存活且未被眩晕，且攻击者在目标射程内，触发反击！
@@ -1373,6 +1511,8 @@ func _do_attack(cell: Vector2i) -> void:
 		_apply_events(counter_ev)
 		_unit_bounce(t.id)
 	u.acted = true
+	move_origin_cell = Vector2i(-1, -1)
+	move_gained_charge = 0
 	_after_action(u)
 
 ## ---------- 技能 ----------
@@ -1387,9 +1527,15 @@ func _is_in_skill_range(cell: Vector2i) -> bool:
 		return false
 	match skill_id:
 		"dragon_slash":
-			return true  # 龙斩：蓄满即可全屏，否则近战
+			var diff := cell - u.cell
+			return diff in GridCore.DIRS4
 		"roar":
-			return GridCore.chebyshev(u.cell, cell) <= 2
+			var roar_r := 2
+			var save := SaveCore.load_state()
+			var inv: Dictionary = save.get("inventory", {})
+			if int(inv.get("megaphone", 0)) > 0:
+				roar_r = 4
+			return GridCore.chebyshev(u.cell, cell) <= roar_r
 		"seven_dash":
 			return GridCore.chebyshev(u.cell, cell) <= u.mov
 		"arrow_rain":
@@ -1401,43 +1547,52 @@ func _do_skill(cell: Vector2i) -> void:
 	var t: BattleUnitScript = _unit_at(cell)
 	var skill_id: String = u.skill_ids[0] if u.skill_ids.size() > 0 else ""
 	_clear_overlay()
+	command_menu.visible = false
 	var events: Array = []
 	match skill_id:
 		"dragon_slash":
-			if u.charge < 10:
-				var dt_cur: Dictionary = CombatCore.dragon_charge_tier(u.charge)
-				info_label.text = "【%s】(当前 %d/10)！需多回合持续绕场奔跑、避开敌袭不被打断，蓄满10格方能施展【劈山裂城】！" % [dt_cur.name, u.charge]
-				_spawn_float_text(u.cell, "气势未满！继续跑图蓄势(%d/10)！" % u.charge, Color(0.4, 0.85, 0.9))
-				_select_unit(u.id)
-				return
-			# 满蓄力大招演出：天地变色 + 百丈真龙 + 直线贯穿前面一条线 + 城关轰塌
-			var line_path: Array[Vector2i] = GridCore.line_cells(u.cell, t.cell, 12, MAP_W, MAP_H)
+			var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
+			var line_len: int = int(dt.get("line_len", 1))
+			var line_path: Array[Vector2i] = GridCore.line_cells(u.cell, t.cell, line_len, MAP_W, MAP_H)
 			var pierced_targets: Array = []
 			for l_cell in line_path:
 				var pu: BattleUnitScript = _unit_at(l_cell)
 				if pu and pu.alive and pu.camp != u.camp and pu.id != t.id:
 					pierced_targets.append(pu)
 
-			_big_moment("🐉 劈山裂城 · 千里青龙偃月斩！！")
-			var hit_desc := "💥 直线贯穿！" if pierced_targets.size() > 0 else "💥 劈山裂城！"
-			_spawn_float_text(u.cell, hit_desc + "汜水关城墙崩塌！诸侯皆被整麻了！", Color(0.2, 1.0, 0.45), true)
-			_shake_camera(6.0)
+			_big_moment("🐉 %s · 青龙偃月斩！！" % dt.name)
+			var hit_desc := "💥 直线贯穿！" if pierced_targets.size() > 0 else "💥 龙芒暴斩！"
+			_spawn_float_text(u.cell, hit_desc + dt.title, dt.color, true)
+			_shake_camera(6.0 if u.charge >= 10 else 4.0)
 			if t:
 				var far_cell: Vector2i = line_path.back() if line_path.size() > 0 else t.cell
-				_spawn_dragon(u.cell, far_cell, 10)
-				_spawn_burst(t.cell, Color(0.2, 1.0, 0.45, 0.6), 3)
+				_spawn_dragon(u.cell, far_cell, u.charge)
+				_spawn_burst(t.cell, dt.color, 3)
 				for pt in pierced_targets:
-					_spawn_burst(pt.cell, Color(0.2, 1.0, 0.45, 0.4), 2)
+					_spawn_burst(pt.cell, dt.color, 2)
 			events = SkillsCore.do_dragon_slash(u, t, pierced_targets)
+			u.acted = true
+			move_origin_cell = Vector2i(-1, -1)
+			move_gained_charge = 0
+			_apply_events(events)
+			_after_action(u)
+			return
 		"roar":
-			_spawn_banner("燕人咆哮！", Color(0.9, 0.7, 0.2))
+			var roar_r := 2
+			var save := SaveCore.load_state()
+			var inv: Dictionary = save.get("inventory", {})
+			if int(inv.get("megaphone", 0)) > 0:
+				roar_r = 4
+				_spawn_banner("📣 高音大喇叭加持·超大声波燕人咆哮！", Color(1.0, 0.8, 0.2))
+			else:
+				_spawn_banner("燕人咆哮！", Color(0.9, 0.7, 0.2))
 			_spawn_float_text(u.cell, "这一嗓子，你忍一下！", Color(1.0, 0.85, 0.2), true)
 			_spawn_shockwave(u.cell, Color(0.9, 0.7, 0.2, 0.5))
 			_spawn_burst(u.cell, Color(0.9, 0.7, 0.2, 0.4), 2)
-			_shake_camera(4.0)
+			_shake_camera(5.0 if roar_r > 2 else 4.0)
 			var targets: Array = []
 			for tt in units:
-				if tt.alive and tt.camp != u.camp and GridCore.chebyshev(u.cell, tt.cell) <= 2:
+				if tt.alive and tt.camp != u.camp and GridCore.chebyshev(u.cell, tt.cell) <= roar_r:
 					targets.append(tt)
 			events = SkillsCore.do_roar(u, targets)
 		"seven_dash":
@@ -1457,10 +1612,11 @@ func _do_skill(cell: Vector2i) -> void:
 			_screen_flash(Color(1, 0.4, 0.2, 0.4), 0.4)
 			_spawn_shockwave(u.cell, Color(1, 0.4, 0.2, 0.6))
 			events = SkillsCore.do_naked_armor(u, units)
-			# 显示爆甲范围
 			_spawn_burst(u.cell, Color(1, 0.4, 0.2, 0.5), 2)
-	_apply_events(events)
 	u.acted = true
+	move_origin_cell = Vector2i(-1, -1)
+	move_gained_charge = 0
+	_apply_events(events)
 	_after_action(u)
 
 ## ---------- 事件应用 ----------
@@ -1477,12 +1633,11 @@ func _apply_events(events: Array) -> void:
 					var dmg_col: Color = Color(1.0, 0.85, 0.2) if is_crit else Color(1, 0.4, 0.3)
 					info_label.text += "\n%s 受到 %d 伤害！" % [t.name, ev.value]
 
-					# 关羽千里逃窜蓄力被打断机制（契合原著小说：最怕蓄力中途被敌摸到）
+					# 关羽千里逃窜蓄力被打断机制（契合原著小说：受击气脉震散，全部清零）
 					if t.id == "guanyu" and t.charge > 0:
-						var lost_charge: int = mini(t.charge, 3)
-						t.charge -= lost_charge
-						_spawn_float_text(t.cell, "💥 受击气乱！蓄力中断(-%d)！" % lost_charge, Color(1.0, 0.35, 0.35), true)
-						info_label.text += "\n关羽遭敌截击气脉受挫！青龙蓄力跌落 %d 格！快派刘备张飞阻敌掩护！" % lost_charge
+						t.charge = 0
+						_spawn_float_text(t.cell, "💥 气脉震散！蓄力清零(归0)！", Color(1.0, 0.25, 0.25), true)
+						info_label.text += "\n关羽遭敌截击气脉震散！青龙蓄力全部清零！快派大哥三弟挡刀！"
 						_sync_text(t)
 
 					# 昌豨怯战：受击后DEF-30%
@@ -1827,8 +1982,8 @@ func _after_action(u) -> void:
 	# 检查胜利
 	if _check_victory():
 		return
-	# 清除选中与命令菜单
-	_cancel_input()
+	# 完成本行动，重置选中与命令状态
+	_finish_turn_action()
 	# 全部行动完自动结束回合
 	var alive_ids: Array = []
 	for uu in _camp_units("player"):
@@ -2048,14 +2203,27 @@ func _on_end_turn_pressed() -> void:
 		_cancel_input()
 	_end_player_turn()
 
-func _cancel_input() -> void:
+func _finish_turn_action() -> void:
 	input_mode = InputMode.NONE
 	selected_id = ""
+	move_origin_cell = Vector2i(-1, -1)
+	move_gained_charge = 0
 	_clear_command_menu()
 	if command_menu:
 		command_menu.visible = false
 	_clear_overlay()
 	_update_dashboard()
+
+func _cancel_input() -> void:
+	if move_origin_cell != Vector2i(-1, -1) and (input_mode == InputMode.ATTACK or input_mode == InputMode.SKILL):
+		input_mode = InputMode.POST_MOVE
+		_clear_overlay()
+		_show_command_menu()
+		return
+	if input_mode == InputMode.POST_MOVE and move_origin_cell != Vector2i(-1, -1):
+		_cmd_undo_move()
+		return
+	_finish_turn_action()
 
 func _clear_overlay() -> void:
 	for c in overlay.get_children():
@@ -2072,12 +2240,37 @@ func _draw_cells(cells, color: Color) -> void:
 
 ## ---------- 胜负判定 ----------
 func _check_victory() -> bool:
+	if victory:
+		return true
 	var commander := _enemy_commander()
 	if commander and not commander.alive:
+		victory = true
+		_handle_commander_defeat(commander)
+		return true
+	var living_enemies := _camp_units("enemy")
+	if living_enemies.is_empty():
 		victory = true
 		_show_win_dialog()
 		return true
 	return false
+
+func _handle_commander_defeat(commander: BattleUnitScript) -> void:
+	var remaining_minions: Array = []
+	for u in units:
+		if u.alive and u.camp == "enemy" and u.id != commander.id:
+			remaining_minions.append(u)
+	if remaining_minions.size() > 0:
+		info_label.text = "💥 敌方主帅【%s】阵亡！残兵全面崩溃溃逃！" % commander.name
+		_shake_camera(6.0)
+		for minion in remaining_minions:
+			_spawn_float_text(minion.cell, "💥 主帅已死！弃甲快逃啊！", Color(1.0, 0.4, 0.2), true)
+			var node: Node2D = unit_nodes.get(minion.id)
+			if node:
+				var tw := create_tween()
+				tw.tween_property(node, "modulate:a", 0.0, 0.6)
+			minion.alive = false
+		await get_tree().create_timer(0.7).timeout
+	_show_win_dialog()
 
 func _check_defeat() -> bool:
 	var players := _camp_units("player")
@@ -2092,11 +2285,11 @@ func _show_win_dialog() -> void:
 	win_dialog_played = true
 	_play_dialog(chapter_id + "_win")
 
-## 结算：占郡 +1000 声望 → 图鉴解锁 → 赠送战利品
+## 结算：占郡 +1000 声望 → 图鉴解锁 → 原著剧情里程碑大礼
 func _go_to_result() -> void:
-	# 结算：扣留战斗交互，弹出结果面板
 	var chapter_title: String = chapter.get("title", "未知")
 	var save := SaveCore.load_state()
+	var is_first_clear: bool = not (chapter_id in save.get("chapters", []))
 	SaveCore.add_prestige(save, 1000)
 	SaveCore.mark_chapter(save, chapter_id)
 	_unlock_collection(save)
@@ -2105,14 +2298,29 @@ func _go_to_result() -> void:
 	# 填结果面板
 	var title_text := "🎉 胜利！%s 告破！" % chapter_title
 	var body := "获得 军功声望 +1000（当前总计 %d）\n诸侯图鉴已更新！" % prestige
-	# 通关赠送战利品（免费奖励入库，不扣除声望，让玩家能自主积攒5000抽神兵）
-	var draw := LotteryCore.draw_seed(1000)
-	if draw.success:
+
+	# 原著剧情首通里程碑大礼（特定战役首通奖励特定仙种，取消每局无脑随机掉落）
+	if is_first_clear:
 		var inv: Dictionary = save.get("inventory", {})
-		var iid: String = draw.item.get("id", "corn")
-		inv[iid] = int(inv.get(iid, 0)) + 1
-		save["inventory"] = inv
-		body += "\n🎁 缴获战利品：" + draw.item.get("name", "?")
+		var seed_id := ""
+		var seed_name := ""
+		match chapter_id:
+			"chapter1":
+				seed_id = "corn"
+				seed_name = "🌽 玉米种子（每回合回血，穿越开荒圣物）"
+			"chapter2":
+				seed_id = "potato"
+				seed_name = "🥔 土豆种子（开局士气暴涨，天下丰饶）"
+			"chapter3":
+				seed_id = "sweet_potato"
+				seed_name = "🍠 番薯种子（全军攻击狂飙，战力翻涌）"
+		if seed_id != "":
+			inv[seed_id] = int(inv.get(seed_id, 0)) + 1
+			save["inventory"] = inv
+			body += "\n🎁 原著剧情大礼：解锁【%s】！" % seed_name
+	else:
+		body += "\n⚔️ 演武重温：磨砺战法，再建奇功！"
+
 	SaveCore.save_state(save)
 	var nxt := _next_chapter()
 	_show_result_panel(title_text, body, nxt)

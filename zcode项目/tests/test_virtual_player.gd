@@ -176,33 +176,23 @@ func _run_all_tests() -> void:
 		_assert(current_scene.scene_file_path == "res://scenes/main.tscn", "物理点击成功从图鉴返回主城！")
 
 	# -------------------------------------------------------------
-	# 阶段 3: 主城一键扫荡与模态弹窗真手测试
+	# 阶段 3: 主城杜绝一键扫荡与演武重温真手测试
 	# -------------------------------------------------------------
-	print("\n--- 【阶段 3】主城一键扫荡与弹窗真手测试 ---")
+	print("\n--- 【阶段 3】主城演武重温与杜绝一键扫荡测试 ---")
 	var btn_sweep: Button = find_node_by_text(root, "一键扫荡")
-	_assert(btn_sweep != null, "成功定位【⚡ 一键扫荡】按钮")
-	if btn_sweep:
-		var pre_p := int(SaveCore.load_state().get("prestige", 0))
-		print("  -> 物理鼠标点击【⚡ 一键扫荡】按钮...")
-		await click_control(btn_sweep, 0.3)
-		
-		# 检查弹窗是否存在
-		var btn_modal_ok: Button = find_node_by_text(root, "领赏凯旋")
-		_assert(btn_modal_ok != null, "扫荡弹窗成功挂载且找到【领赏凯旋】确认按钮")
-		if btn_modal_ok:
-			print("  -> 物理鼠标点击【领赏凯旋】按钮...")
-			await click_control(btn_modal_ok, 0.2)
-			var post_p := int(SaveCore.load_state().get("prestige", 0))
-			_assert(post_p == pre_p + 1000, "扫荡成功增加 1000 声望（当前声望: %d）" % post_p)
+	_assert(btn_sweep == null, "单机游戏杜绝无脑无限刷资源：【一键扫荡】按钮已彻底废除！")
+
+	var btn_re_battle: Button = find_node_by_text(root, "再次出征")
+	_assert(btn_re_battle != null, "已通关章节提供健康演武入口：成功定位【⚔️ 再次出征 (演武重温)】按钮！")
 
 	# -------------------------------------------------------------
 	# 阶段 4: 进军战役与战前剧情真实点击推进测试
 	# -------------------------------------------------------------
 	print("\n--- 【阶段 4】进军战役与剧情对白真手交互测试 ---")
-	var btn_enter_battle: Button = find_node_by_text(root, "手动重战")
+	var btn_enter_battle: Button = btn_re_battle
 	if btn_enter_battle == null:
 		btn_enter_battle = find_node_by_text(root, "进 军 出 征")
-	_assert(btn_enter_battle != null, "成功定位第1关出征/重战按钮")
+	_assert(btn_enter_battle != null, "成功定位第1关出征/演武重温按钮")
 	if btn_enter_battle:
 		print("  -> 物理鼠标点击出征按钮进入第一关战场...")
 		await click_control(btn_enter_battle, 0.5)
@@ -232,7 +222,7 @@ func _run_all_tests() -> void:
 		_assert(battle.dialog_showing == false, "物理点击跳过剧情后，剧情彻底关闭，战局正式开始！")
 
 	# -------------------------------------------------------------
-	# 阶段 5: 真实物理点击选人、取消、走位与待机手感测试
+	# 阶段 5: 真实物理点击选人、移动后出菜单（曹操传模式）、待机手感测试
 	# -------------------------------------------------------------
 	print("\n--- 【阶段 5】真实棋盘网格点击、走位与指令测试 ---")
 	
@@ -253,31 +243,42 @@ func _run_all_tests() -> void:
 	_assert(battle.selected_id == "", "物理鼠标右键成功取消选人（selected_id 为空）！")
 	_assert(battle.command_menu.visible == false, "军令指示菜单随之隐退！")
 
-	# 子测试 5.3: 重新点击关羽 -> 直接点击绿色格子进行直观走位
+	# 子测试 5.3: 重新点击关羽 -> 移动到 (4, 5) -> 验证曹操传式气泡菜单弹出
 	print("  -> 再次物理鼠标左键点击关羽...")
 	await mouse_click(guanyu_px, false, 0.15)
 	_assert(battle.selected_id == "guanyu", "关羽重新被选中")
 
-	# 选择一个关羽可达的目标格 (4, 5)
 	var target_cell := Vector2i(4, 5)
 	var target_px: Vector2 = battle._cell_to_px(target_cell)
 	print("  -> 物理鼠标直接点击绿色可达格子 (4, 5) 坐标: %s..." % target_px)
-	await mouse_click(target_px, false, 0.25)
+	await mouse_click(target_px, false, 0.3)
 	
 	var guanyu_unit = battle._unit_by_id("guanyu")
 	_assert(guanyu_unit.cell == target_cell, "关羽成功移动到目标格 (4, 5)！")
 	_assert(guanyu_unit.charge == 2, "关羽移动2格累积2层蓄力（charge = %d）！" % guanyu_unit.charge)
+	_assert(guanyu_unit.acted == false, "【曹操传核心机制】移动完成后不立即结束，武将仍可攻击或释放绝技！")
+	_assert(battle.command_menu.visible == true, "角色精灵身旁成功浮现贴身指令气泡菜单！")
 
-	_assert(guanyu_unit.acted == true, "关羽走位后自动进入行动完毕状态！")
+	# 子测试 5.4: 点击贴身气泡菜单中的【待机】按钮完成关羽行动
+	var btn_gy_wait: Button = find_node_by_text(battle.command_menu, "待机")
+	_assert(btn_gy_wait != null, "成功在关羽身旁气泡菜单中找到【待机】按钮")
+	if btn_gy_wait:
+		print("  -> 点击气泡菜单【待机】按钮结束关羽本回合行动...")
+		await click_control(btn_gy_wait, 0.2)
+		_assert(guanyu_unit.acted == true, "确认待机后关羽进入行动完毕状态！")
 
-	# 子测试 5.4: 点击张飞进行待机蓄力（测试燕人咆哮蓄力与军令菜单物理点击）
-	print("  -> 物理鼠标点击张飞 (1, 6) 进行选中与军令待机测试...")
+	# 子测试 5.5: 点击张飞进行待机蓄力（测试原地待命与贴身菜单点击）
+	print("  -> 物理鼠标点击张飞 (1, 6) 进行选中，并再次点击自身展开指令菜单...")
 	var zhangfei_px: Vector2 = battle._cell_to_px(Vector2i(1, 6))
 	await mouse_click(zhangfei_px, false, 0.2)
 	_assert(battle.selected_id == "zhangfei", "物理点击成功选中张飞（selected_id == zhangfei）！")
-	_assert(battle.command_menu.visible == true, "张飞军令菜单成功浮现！")
+	# 再次点击已选中的武将自身，触发原地待命弹出指令气泡
+	await mouse_click(zhangfei_px, false, 0.2)
+	_assert(battle.command_menu.visible == true, "再次点击张飞自身，贴身军令气泡菜单成功浮现！")
 
 	var btn_standby: Button = find_node_by_text(battle.command_menu, "待机")
+	if btn_standby == null:
+		btn_standby = find_node_by_text(battle.command_menu, "蓄力")
 	_assert(btn_standby != null, "成功在张飞军令菜单中找到【待机/蓄力】按钮")
 	if btn_standby:
 		print("  -> 物理鼠标点击【待机/蓄力】按钮...")

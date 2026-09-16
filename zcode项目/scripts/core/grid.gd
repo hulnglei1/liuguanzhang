@@ -92,27 +92,26 @@ static func cells_in_radius(center: Vector2i, radius: int, w: int, h: int) -> Ar
 				out.append(c)
 	return out
 
-## 直线贯穿格点：从 start 向 target 方向投射一条直线（用于青龙偃月贯穿AOE）
-static func line_cells(start: Vector2i, target: Vector2i, max_len: int, w: int, h: int) -> Array[Vector2i]:
+## 直线贯穿格点：从 start 指向 target 的方向，以 target 为起点向后贯穿 line_len 格
+static func line_cells(start: Vector2i, target: Vector2i, line_len: int, w: int, h: int) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
-	if start == target:
+	if start == target or line_len <= 0:
 		return out
 	var diff := target - start
 	var step_x := 0
 	var step_y := 0
-	if abs(diff.x) > abs(diff.y) * 2:
+	if abs(diff.x) >= abs(diff.y):
 		step_x = 1 if diff.x > 0 else -1
-		step_y = 0
-	elif abs(diff.y) > abs(diff.x) * 2:
-		step_x = 0
-		step_y = 1 if diff.y > 0 else -1
 	else:
-		step_x = 1 if diff.x > 0 else (-1 if diff.x < 0 else 0)
-		step_y = 1 if diff.y > 0 else (-1 if diff.y < 0 else 0)
-	
+		step_y = 1 if diff.y > 0 else -1
 	var dir := Vector2i(step_x, step_y)
-	var cur := start
-	for i in range(max_len):
+	
+	# 被攻击点本身必定在内
+	var cur := target
+	if in_bounds(cur, w, h):
+		out.append(cur)
+	# 沿该方向贯穿后面的一条线
+	for i in range(1, line_len):
 		cur += dir
 		if in_bounds(cur, w, h):
 			out.append(cur)

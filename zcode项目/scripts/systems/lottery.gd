@@ -10,12 +10,12 @@ const SEED_POOL := [
 	{"id": "sweet_potato", "name": "番薯种子", "desc": "关卡内我方攻击+10%", "buff": "atk_pct", "value": 0.10},
 ]
 
-## 武器奖池：消耗5000声望，抽取强力装备/技能词条
+## 现代降维与沙雕神物奖池：消耗5000声望，抽取原著穿越系统专属神物
 const WEAPON_POOL := [
-	{"id": "jinggang_dou", "name": "金刚护腕", "desc": "装备：防御+6", "buff": "def_gear", "value": 6},
-	{"id": "da_he_dan", "name": "大爆炸·大黄丹", "desc": "技能词条：范围AOE伤害", "buff": "aoe", "value": 1},
-	{"id": "shi_tou", "name": "东风·微缩版", "desc": "战技：全屏轰击，秒杀黄巾杂兵", "buff": "full_screen", "value": 1},
-	{"id": "gu_shou", "name": "古兽护符", "desc": "装备：生命+40", "buff": "hp_gear", "value": 40},
+	{"id": "electric_baton", "name": "现代防暴电棍", "desc": "伤害仅10点，但强力高压电击敌将抽搐口吐白沫、强制眩晕1回合！", "buff": "stun_baton", "value": 10},
+	{"id": "dongfeng", "name": "东风·微缩版", "desc": "降维大杀器：战术呼叫全图爆炸轰击，范围爆破！", "buff": "full_screen", "value": 1},
+	{"id": "megaphone", "name": "高音大喇叭", "desc": "张飞专属扩音神物：燕人咆哮范围扩大2倍，震穿敌军耳膜！", "buff": "roar_boost", "value": 2},
+	{"id": "military_coat", "name": "防寒军大衣", "desc": "皇叔御寒战袍：全军抗击打提升，防御+15，坚韧耐揍！", "buff": "def_gear", "value": 15},
 ]
 
 ## 抽一次种子（声望≥1000，扣1000），返回 {item, cost, success, new_prestige}
