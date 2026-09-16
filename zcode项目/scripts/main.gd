@@ -4,6 +4,7 @@ extends Control
 const BATTLE_SCENE := preload("res://scenes/battle.tscn")
 const BattleScript := preload("res://scripts/battle.gd")
 const SaveCore := preload("res://scripts/systems/save.gd")
+const LotteryCore := preload("res://scripts/systems/lottery.gd")
 
 const CHAPTER_DEFS := [
 	{
@@ -41,6 +42,7 @@ const CHAPTER_DEFS := [
 ]
 
 var save: Dictionary
+var label_status: Label
 
 func _ready() -> void:
 	save = SaveCore.load_state()
@@ -143,15 +145,15 @@ func _build_menu() -> void:
 	# 右侧声望与通关信息
 	var p: int = int(save.get("prestige", 0))
 	var cleared_chapters: Array = save.get("chapters", [])
-	var status_lbl := Label.new()
-	status_lbl.text = "🎖️ 军功声望: %d   |   🏆 通关进度: %d/4 关" % [p, cleared_chapters.size()]
-	status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	status_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	status_lbl.add_theme_font_size_override("font_size", 15)
-	status_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	status_lbl.position = Vector2(620, 12)
-	status_lbl.size = Vector2(560, 30)
-	nav_panel.add_child(status_lbl)
+	label_status = Label.new()
+	label_status.text = "🎖️ 军功声望: %d   |   🏆 通关进度: %d/4 关" % [p, cleared_chapters.size()]
+	label_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	label_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label_status.add_theme_font_size_override("font_size", 15)
+	label_status.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	label_status.position = Vector2(620, 12)
+	label_status.size = Vector2(560, 30)
+	nav_panel.add_child(label_status)
 
 	# 3. 四大章节战役卡片 (2行 x 2列，每张卡片 580 x 230)
 	var cleared_set := {}
@@ -226,19 +228,42 @@ func _build_menu() -> void:
 		boss_info.size = Vector2(544, 22)
 		card.add_child(boss_info)
 
-		# 进军按钮
-		var btn_enter := Button.new()
-		btn_enter.text = "⚔️ 进 军 出 征" if not is_cleared else "🔁 扫 荡 重 战"
-		btn_enter.position = Vector2(18, 148)
-		btn_enter.size = Vector2(544, 46)
-		btn_enter.add_theme_font_size_override("font_size", 16)
-		var btn_bg: Color = Color(0.35, 0.18, 0.12) if not is_cleared else Color(0.14, 0.22, 0.28)
-		var btn_border: Color = Color(0.9, 0.5, 0.3) if not is_cleared else Color(0.4, 0.7, 0.9)
-		btn_enter.add_theme_stylebox_override("normal", _create_btn_style(btn_bg, btn_border))
-		btn_enter.add_theme_stylebox_override("hover", _create_btn_style(btn_bg.lightened(0.2), btn_border.lightened(0.2)))
-		btn_enter.add_theme_color_override("font_color", Color(1.0, 0.95, 0.9))
-		btn_enter.pressed.connect(_on_chapter.bind(def.id))
-		card.add_child(btn_enter)
+		# 进军与扫荡按钮
+		if is_cleared:
+			var btn_sweep := Button.new()
+			btn_sweep.text = "⚡ 一键扫荡 (+1000声望)"
+			btn_sweep.position = Vector2(18, 148)
+			btn_sweep.size = Vector2(265, 46)
+			btn_sweep.add_theme_font_size_override("font_size", 15)
+			btn_sweep.add_theme_stylebox_override("normal", _create_btn_style(Color(0.12, 0.32, 0.22), Color(0.35, 0.8, 0.5)))
+			btn_sweep.add_theme_stylebox_override("hover", _create_btn_style(Color(0.18, 0.45, 0.3), Color(0.5, 1.0, 0.65)))
+			btn_sweep.add_theme_color_override("font_color", Color(0.9, 1.0, 0.9))
+			btn_sweep.pressed.connect(_on_sweep.bind(def.id, def.title))
+			card.add_child(btn_sweep)
+
+			var btn_replay := Button.new()
+			btn_replay.text = "🔁 手动重战"
+			btn_replay.position = Vector2(297, 148)
+			btn_replay.size = Vector2(265, 46)
+			btn_replay.add_theme_font_size_override("font_size", 15)
+			btn_replay.add_theme_stylebox_override("normal", _create_btn_style(Color(0.16, 0.22, 0.28), Color(0.4, 0.65, 0.85)))
+			btn_replay.add_theme_stylebox_override("hover", _create_btn_style(Color(0.22, 0.3, 0.38), Color(0.6, 0.85, 1.0)))
+			btn_replay.add_theme_color_override("font_color", Color(0.9, 0.95, 1.0))
+			btn_replay.pressed.connect(_on_chapter.bind(def.id))
+			card.add_child(btn_replay)
+		else:
+			var btn_enter := Button.new()
+			btn_enter.text = "⚔️ 进 军 出 征"
+			btn_enter.position = Vector2(18, 148)
+			btn_enter.size = Vector2(544, 46)
+			btn_enter.add_theme_font_size_override("font_size", 16)
+			var btn_bg: Color = Color(0.35, 0.18, 0.12)
+			var btn_border: Color = Color(0.9, 0.5, 0.3)
+			btn_enter.add_theme_stylebox_override("normal", _create_btn_style(btn_bg, btn_border))
+			btn_enter.add_theme_stylebox_override("hover", _create_btn_style(btn_bg.lightened(0.2), btn_border.lightened(0.2)))
+			btn_enter.add_theme_color_override("font_color", Color(1.0, 0.95, 0.9))
+			btn_enter.pressed.connect(_on_chapter.bind(def.id))
+			card.add_child(btn_enter)
 
 	# 4. 底部版权与版本提示 (1280 x 40)
 	var footer := Label.new()
@@ -256,6 +281,64 @@ func _on_chapter(id: String) -> void:
 	print("[主菜单] 进军章节：", id)
 	BattleScript.chapter_id = id
 	get_tree().change_scene_to_file("res://scenes/battle.tscn")
+
+## 一键扫荡已通关关卡：直接领取声望与基础战利品
+func _on_sweep(id: String, ch_title: String) -> void:
+	SaveCore.add_prestige(save, 1000)
+	var draw := LotteryCore.draw_seed(1000)
+	var loot_name := "神农仙种"
+	if draw.success:
+		var inv: Dictionary = save.get("inventory", {})
+		var iid: String = draw.item.get("id", "corn")
+		inv[iid] = int(inv.get(iid, 0)) + 1
+		save["inventory"] = inv
+		loot_name = draw.item.get("name", "神农仙种")
+	SaveCore.save_state(save)
+	_refresh_status_bar()
+	_show_sweep_modal(ch_title, loot_name)
+
+func _refresh_status_bar() -> void:
+	var p: int = int(save.get("prestige", 0))
+	var cleared_chapters: Array = save.get("chapters", [])
+	if label_status:
+		label_status.text = "🎖️ 军功声望: %d   |   🏆 通关进度: %d/4 关" % [p, cleared_chapters.size()]
+
+func _show_sweep_modal(ch_title: String, loot_name: String) -> void:
+	var modal := Panel.new()
+	modal.position = Vector2(380, 220)
+	modal.size = Vector2(520, 260)
+	modal.add_theme_stylebox_override("panel", _create_box_style(Color(0.08, 0.12, 0.1, 0.98), Color(0.3, 0.85, 0.5), 12, 2))
+	modal.z_index = 100
+	add_child(modal)
+
+	var title := Label.new()
+	title.text = "⚡ 破竹扫荡告捷！"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", Color(0.4, 1.0, 0.6))
+	title.position = Vector2(20, 20)
+	title.size = Vector2(480, 32)
+	modal.add_child(title)
+
+	var p: int = int(save.get("prestige", 0))
+	var info := Label.new()
+	info.text = "主公威震四方！大军荡平【%s】！\n\n🎖️ 缴获军功声望 +1000（当前总计 %d）\n🎁 战利品入库：%s ×1" % [ch_title, p, loot_name]
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.add_theme_font_size_override("font_size", 16)
+	info.add_theme_color_override("font_color", Color(0.9, 0.95, 0.92))
+	info.position = Vector2(20, 68)
+	info.size = Vector2(480, 110)
+	modal.add_child(info)
+
+	var btn_ok := Button.new()
+	btn_ok.text = "领赏凯旋"
+	btn_ok.position = Vector2(170, 192)
+	btn_ok.size = Vector2(180, 44)
+	btn_ok.add_theme_font_size_override("font_size", 16)
+	btn_ok.add_theme_stylebox_override("normal", _create_btn_style(Color(0.15, 0.45, 0.25), Color(0.4, 0.9, 0.6)))
+	btn_ok.pressed.connect(modal.queue_free)
+	modal.add_child(btn_ok)
 
 func _go_lottery() -> void:
 	get_tree().change_scene_to_file("res://scenes/lottery.tscn")

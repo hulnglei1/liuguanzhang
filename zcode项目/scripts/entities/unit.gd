@@ -107,6 +107,12 @@ func is_stunned() -> bool:
 func is_mounted() -> bool:
 	return mount.has("rider") or mount.has("horse")
 
+## 实际移动力：若骑乘赵云，继承6格移动力
+func effective_mov() -> int:
+	if is_mounted() and mount.has("horse"):
+		return 6
+	return mov
+
 ## 技能是否就绪（无冷却且未眩晕）
 func skill_ready(skill_id: String) -> bool:
 	if is_stunned():

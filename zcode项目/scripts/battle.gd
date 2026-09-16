@@ -822,10 +822,16 @@ func _blocked_cells(exclude: String = "") -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for u in units:
 		if u.alive and u.id != exclude:
+			# 被骑乘的坐骑不作为独立占位障碍
+			if u.mount.has("rider"):
+				continue
 			out.append(u.cell)
 	for o in chapter["map"]["obstacles"]:
 		out.append(Vector2i(o.x, o.y))
 	return out
+
+func _get_unit_mov(u: BattleUnitScript) -> int:
+	return u.effective_mov()
 
 func _sync_node(u) -> void:
 	var node: Node2D = unit_nodes.get(u.id)
@@ -910,7 +916,7 @@ func _select_unit(id: String) -> void:
 		return
 	_clear_overlay()
 	var blocked := _blocked_cells(id)
-	var reach := GridCore.reachable(u.cell, u.mov, MAP_W, MAP_H, blocked)
+	var reach := GridCore.reachable(u.cell, _get_unit_mov(u), MAP_W, MAP_H, blocked)
 	_draw_cells(reach.keys(), Color(0.2, 0.8, 0.4, 0.35))
 	input_mode = InputMode.SELECT
 	_update_dashboard()
@@ -950,7 +956,7 @@ func _show_command_menu() -> void:
 	# 1. 移动
 	var btn_move := Button.new()
 	btn_move.custom_minimum_size = Vector2(265, 42)
-	btn_move.text = "👟 战术移动 (%d格)" % u.mov
+	btn_move.text = "👟 战术移动 (%d格)" % _get_unit_mov(u)
 	btn_move.pressed.connect(_cmd_move)
 	row_grid.add_child(btn_move)
 
@@ -988,14 +994,21 @@ func _show_command_menu() -> void:
 	btn_wait.pressed.connect(_cmd_wait)
 	row_grid.add_child(btn_wait)
 
-	# 5. 战术合体（赵云/关羽/刘备）
-	var mount_target := _find_mountable_target(u)
-	if mount_target != null:
-		var btn_mount := Button.new()
-		btn_mount.custom_minimum_size = Vector2(265, 42)
-		btn_mount.text = "🐎 战术合体 (骑乘%s)" % mount_target.name
-		btn_mount.pressed.connect(_cmd_mount.bind(mount_target))
-		row_grid.add_child(btn_mount)
+	# 5. 战术合体或解除合体
+	if u.is_mounted():
+		var btn_unmount := Button.new()
+		btn_unmount.custom_minimum_size = Vector2(265, 42)
+		btn_unmount.text = "🏇 解除合体 (步骑分离)"
+		btn_unmount.pressed.connect(_cmd_unmount)
+		row_grid.add_child(btn_unmount)
+	else:
+		var mount_target := _find_mountable_target(u)
+		if mount_target != null:
+			var btn_mount := Button.new()
+			btn_mount.custom_minimum_size = Vector2(265, 42)
+			btn_mount.text = "🐎 战术合体 (骑乘%s)" % mount_target.name
+			btn_mount.pressed.connect(_cmd_mount.bind(mount_target))
+			row_grid.add_child(btn_mount)
 
 	# 6. 取消指令
 	var btn_cancel := Button.new()
@@ -1015,10 +1028,35 @@ func _cmd_mount(target: BattleUnitScript) -> void:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
 	if u and target:
 		SkillsCore.do_mount(u, target)
-		info_label.text = "【%s】与【%s】合体！化身全图疾驰战车！（移动力提升至 %d，奔跑蓄力效率翻倍！）" % [u.name, target.name, u.mov]
+		target.cell = u.cell
+		var target_node: Node2D = unit_nodes.get(target.id)
+		if target_node:
+			target_node.visible = false
+		info_label.text = "【%s】与【%s】合体！化身全图疾驰战车！（移动力提升至 %d，奔跑蓄力效率翻倍！）" % [u.name, target.name, _get_unit_mov(u)]
 		_sync_text(u)
 		_sync_text(target)
 		_show_command_menu()
+
+func _cmd_unmount() -> void:
+	var u: BattleUnitScript = _unit_by_id(selected_id)
+	if u and u.is_mounted():
+		var horse_id: String = u.mount.get("horse", "")
+		var horse: BattleUnitScript = _unit_by_id(horse_id) if horse_id != "" else null
+		if horse:
+			SkillsCore.do_unmount(u, horse)
+			var horse_node: Node2D = unit_nodes.get(horse.id)
+			if horse_node:
+				horse_node.visible = true
+			for d in GridCore.DIRS4:
+				var adj := u.cell + d
+				if GridCore.in_bounds(adj, MAP_W, MAP_H) and adj not in _blocked_cells(""):
+					horse.cell = adj
+					break
+			_sync_node(horse)
+			info_label.text = "【%s】与【%s】分离！重回各自独立作战！" % [u.name, horse.name]
+			_sync_text(u)
+			_sync_text(horse)
+			_show_command_menu()
 
 func _has_attackable_target(u) -> bool:
 	for t in units:
@@ -1062,6 +1100,7 @@ func _do_wait(u) -> void:
 	if "roar" in u.skill_ids and u.charge < 3:
 		u.charge += 1
 		info_label.text = "张飞蓄力 → %d/3 轮！满蓄力怒吼可眩晕大范围！" % u.charge
+		_spawn_float_text(u.cell, "气沉丹田...蓄力中！(%d/3)" % u.charge, Color(1.0, 0.85, 0.2))
 	else:
 		info_label.text = "%s 待机（跳过本回合）" % u.name
 	_after_action(u)
@@ -1070,7 +1109,7 @@ func _do_wait(u) -> void:
 func _is_in_reachable(cell: Vector2i) -> bool:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
 	var blocked := _blocked_cells(selected_id)
-	return GridCore.reachable(u.cell, u.mov, MAP_W, MAP_H, blocked).has(cell)
+	return GridCore.reachable(u.cell, _get_unit_mov(u), MAP_W, MAP_H, blocked).has(cell)
 
 func _do_move(cell: Vector2i) -> void:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
@@ -1081,15 +1120,32 @@ func _do_move(cell: Vector2i) -> void:
 	_animate_move(u, path)
 	u.cell = cell
 	u.acted = true
+	# 若处于骑乘合体，马匹（赵云）随行同步坐标
+	if u.is_mounted() and u.mount.has("horse"):
+		var horse := _unit_by_id(u.mount["horse"])
+		if horse and horse.alive:
+			horse.cell = u.cell
+			_sync_node(horse)
 	_sync_text(u)
 	# 关羽蓄力：移动格数 = 蓄力值（骑乘效率×2）
 	if "dragon_slash" in u.skill_ids:
 		var eff := SkillsCore.mounted_charge_efficiency() if u.is_mounted() else 1
 		u.charge = clampi(u.charge + moved_cells * eff, 0, 10)
 		info_label.text = "关羽蓄力 → %d/10（跑 %d 格）！跑得越远，斩得越狠！" % [u.charge, moved_cells]
+		if u.charge >= 10:
+			_spawn_float_text(u.cell, "蓄力拉满！青龙出世！", Color(0.3, 1.0, 0.5), true)
+		elif u.is_mounted():
+			_spawn_float_text(u.cell, "赵云汗血飞驰！双倍充能！", Color(0.4, 0.9, 1.0))
+		else:
+			_spawn_float_text(u.cell, "马哥撑住！冲刺中！", Color(0.5, 0.8, 0.9))
 	else:
 		info_label.text = "%s 移动到 (%d,%d)" % [u.name, cell.x, cell.y]
 	_clear_overlay()
+
+	# 时序对齐：等待移动动画播放完毕再执行后续结算
+	var move_duration: float = float(moved_cells) * 0.06
+	if move_duration > 0:
+		await get_tree().create_timer(move_duration).timeout
 	_after_action(u)
 
 ## 走格动画：单位节点沿路径平滑移动
@@ -1204,7 +1260,10 @@ func _apply_events(events: Array) -> void:
 				if t:
 					_flash_unit(t.id, Color(1, 0.3, 0.3))
 					_unit_bounce(t.id)
-					_spawn_float_text(t.cell, "-%d" % ev.value, Color(1, 0.4, 0.3))
+					var is_crit: bool = ev.get("crit", false) or int(ev.get("value", 0)) >= 50
+					var dmg_str: String = ("💥暴击 -%d" if is_crit else "-%d") % ev.value
+					var dmg_col: Color = Color(1.0, 0.85, 0.2) if is_crit else Color(1, 0.4, 0.3)
+					_spawn_float_text(t.cell, dmg_str, dmg_col, is_crit)
 					info_label.text += "\n%s 受到 %d 伤害！" % [t.name, ev.value]
 					# 昌豨怯战：受击后DEF-30%
 					if "feigui" in t.skill_ids and not t.coward_debuff:
@@ -1267,17 +1326,26 @@ func _unit_node_hide(id: String) -> void:
 	if node:
 		node.visible = false
 
-## 伤害/状态飘字：在单位格上方生成上飘渐隐的文字
-func _spawn_float_text(cell: Vector2i, text: String, color: Color) -> void:
+## 伤害/状态飘字：在单位格上方生成带描边上飘渐隐的文字
+func _spawn_float_text(cell: Vector2i, text: String, color: Color, is_crit: bool = false) -> void:
 	var lbl := Label.new()
 	lbl.text = text
 	lbl.add_theme_color_override("font_color", color)
-	lbl.add_theme_font_size_override("font_size", 16)
-	lbl.position = _cell_to_px(cell) + Vector2(-28, -26)
-	lbl.z_index = 50
+	lbl.add_theme_constant_override("outline_size", 3)
+	lbl.add_theme_color_override("font_outline_color", Color(0.04, 0.04, 0.05, 0.95))
+	var font_sz := 24 if is_crit else 16
+	lbl.add_theme_font_size_override("font_size", font_sz)
+	lbl.position = _cell_to_px(cell) + Vector2(-36, -30)
+	lbl.z_index = 55
 	unit_root.add_child(lbl)
 	var tw := create_tween()
-	tw.tween_property(lbl, "position", lbl.position + Vector2(0, -26), 0.65)
+	if is_crit:
+		lbl.scale = Vector2(0.5, 0.5)
+		tw.tween_property(lbl, "scale", Vector2(1.25, 1.25), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(lbl, "scale", Vector2(1.0, 1.0), 0.1)
+		tw.parallel().tween_property(lbl, "position", lbl.position + Vector2(0, -36), 0.7)
+	else:
+		tw.tween_property(lbl, "position", lbl.position + Vector2(0, -28), 0.65)
 	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 0.65)
 	tw.tween_callback(lbl.queue_free)
 
@@ -1577,9 +1645,13 @@ func _run_enemy_turn() -> void:
 			if dist > u.rng:
 				_move_toward(u, target.cell)
 				await get_tree().create_timer(0.1).timeout
+				if GridCore.chebyshev(u.cell, target.cell) <= u.rng:
+					_ai_attack(u, target)
 			elif dist <= 1:
 				_move_away(u, target.cell)
 				await get_tree().create_timer(0.1).timeout
+				if GridCore.chebyshev(u.cell, target.cell) <= u.rng:
+					_ai_attack(u, target)
 			else:
 				_ai_attack(u, target)
 		else:
@@ -1589,6 +1661,8 @@ func _run_enemy_turn() -> void:
 			else:
 				_move_toward(u, target.cell)
 				await get_tree().create_timer(0.1).timeout
+				if GridCore.chebyshev(u.cell, target.cell) <= u.rng:
+					_ai_attack(u, target)
 	# 敌回合结束
 	for u in _camp_units("enemy"):
 		u.end_turn()
@@ -1607,11 +1681,17 @@ func _nearest_player(u) -> BattleUnitScript:
 
 func _move_toward(u, target_cell: Vector2i) -> void:
 	var blocked := _blocked_cells(u.id)
-	var path := GridCore.path(u.cell, target_cell, MAP_W, MAP_H, blocked)
+	var filtered_blocked: Array[Vector2i] = []
+	for c in blocked:
+		if c != target_cell:
+			filtered_blocked.append(c)
+	var path := GridCore.path(u.cell, target_cell, MAP_W, MAP_H, filtered_blocked)
 	if path.size() > 0:
-		var step := path[min(u.mov, path.size()) - 1]
-		u.cell = step
-		_sync_node(u)
+		var max_step: int = mini(int(u.mov), path.size() - 1)
+		if max_step > 0:
+			var step: Vector2i = path[max_step - 1]
+			u.cell = step
+			_sync_node(u)
 
 func _move_away(u, target_cell: Vector2i) -> void:
 	var dir: Vector2i = (u.cell - target_cell).sign()
@@ -1639,6 +1719,13 @@ func _ai_attack(u, target) -> void:
 func _begin_player_turn() -> void:
 	for u in _camp_units("player"):
 		u.acted = false
+		# 玉米种子回血：每回合开始时自动恢复生命
+		if u.alive and u.hp_regen > 0 and u.hp < u.max_hp:
+			var heal: int = mini(u.hp_regen, u.max_hp - u.hp)
+			if heal > 0:
+				u.hp += heal
+				_spawn_float_text(u.cell, "+%d" % heal, Color(0.3, 1.0, 0.4))
+				_sync_node(u)
 	_check_turn_events()
 	_check_pressure_flag()
 	input_mode = InputMode.NONE
@@ -1671,9 +1758,24 @@ func _check_turn_events() -> void:
 			_play_dialog(ev.key)
 
 func _play_dialog(key: String) -> void:
-	if not dialogs.has(key):
+	var actual_key := key
+	if not dialogs.has(actual_key):
+		for i in range(1, 5):
+			var short_pref := "ch%d_" % i
+			var long_pref := "chapter%d_" % i
+			if actual_key.begins_with(short_pref):
+				var alt := actual_key.replace(short_pref, long_pref)
+				if dialogs.has(alt):
+					actual_key = alt
+					break
+			elif actual_key.begins_with(long_pref):
+				var alt := actual_key.replace(long_pref, short_pref)
+				if dialogs.has(alt):
+					actual_key = alt
+					break
+	if not dialogs.has(actual_key):
 		return
-	pending_dialog = dialogs[key].duplicate()
+	pending_dialog = dialogs[actual_key].duplicate()
 	dialog_showing = true
 	dialog_box.visible = true
 	_show_next_dialog_line()
@@ -1754,7 +1856,7 @@ func _show_win_dialog() -> void:
 	win_dialog_played = true
 	_play_dialog(chapter_id + "_win")
 
-## 结算：占郡 +1000 声望 → 图鉴解锁 → 引导抽奖
+## 结算：占郡 +1000 声望 → 图鉴解锁 → 赠送战利品
 func _go_to_result() -> void:
 	# 结算：扣留战斗交互，弹出结果面板
 	var chapter_title: String = chapter.get("title", "未知")
@@ -1762,19 +1864,20 @@ func _go_to_result() -> void:
 	SaveCore.add_prestige(save, 1000)
 	SaveCore.mark_chapter(save, chapter_id)
 	_unlock_collection(save)
-	SaveCore.save_state(save)
 	var prestige: int = int(save.get("prestige", 0))
 
 	# 填结果面板
 	var title_text := "🎉 胜利！%s 告破！" % chapter_title
-	var body := "获得 声望 +1000（当前 %d）\n图鉴已更新！" % prestige
-	# 通关抽一次种子作为奖励预览（若声望足够）
-	if prestige >= 1000:
-		var draw := LotteryCore.draw_seed(prestige)
-		if draw.success:
-			SaveCore.award_item(save, draw.item, 1000)
-			SaveCore.save_state(save)
-			body += "\n🎁 战利品抽得：" + draw.item.get("name", "?")
+	var body := "获得 军功声望 +1000（当前总计 %d）\n诸侯图鉴已更新！" % prestige
+	# 通关赠送战利品（免费奖励入库，不扣除声望，让玩家能自主积攒5000抽神兵）
+	var draw := LotteryCore.draw_seed(1000)
+	if draw.success:
+		var inv: Dictionary = save.get("inventory", {})
+		var iid: String = draw.item.get("id", "corn")
+		inv[iid] = int(inv.get(iid, 0)) + 1
+		save["inventory"] = inv
+		body += "\n🎁 缴获战利品：" + draw.item.get("name", "?")
+	SaveCore.save_state(save)
 	var nxt := _next_chapter()
 	_show_result_panel(title_text, body, nxt)
 
@@ -1870,6 +1973,14 @@ func _unlock_collection(save: Dictionary) -> void:
 	var scene_key := _scene_key_for_chapter()
 	if scene_key != "":
 		SaveCore.collect(save, "scene_" + scene_key)
+
+	# 核心彩蛋与隐藏解锁（保证 25/25 100% 满收集）
+	if chapter_id == "chapter1":
+		# 汜水关温酒：曹操叹服“这还不阴”，解锁曹操
+		SaveCore.collect(save, "warrior_caocao")
+	elif chapter_id == "chapter2":
+		# 虎牢关击退吕布：吕布惊呼“赤兔快跑”，解锁该名场面
+		SaveCore.collect(save, "scene_chitu_kaopao")
 
 func _scene_key_for_chapter() -> String:
 	match chapter_id:
