@@ -84,6 +84,7 @@ var morale: Dictionary = {"player": 100, "enemy": 100}
 var refuse_penalty_active := false
 var victory := false
 var gate_broken := false
+var obstacle_nodes: Dictionary = {}
 
 # 输入状态机
 enum InputMode { NONE, SELECT, MOVE, ATTACK, SKILL, POST_MOVE }
@@ -192,9 +193,10 @@ func _apply_gear_bonuses() -> void:
 	if add_def > 0 or add_hp > 0 or atk_pct > 1.0:
 		info_label.text += "\n（背包装备已生效：防+%d 血+%d 攻x%.2f）" % [add_def, add_hp, atk_pct]
 
-## 初始化地形：渲染高地格 + 给臧霸设占山状态
+## 初始化地形：渲染高地格 + 障碍物城门 + 给臧霸设占山状态
 func _init_environment() -> void:
 	_draw_hills()
+	_draw_obstacles()
 	for u in units:
 		if "king_hill" in u.skill_ids:
 			u.on_hill = _is_hill(u.cell)
@@ -230,6 +232,48 @@ func _draw_hills() -> void:
 		map_root.add_child(rect)
 	if hills.size() > 0:
 		info_label.text += "\n（棕黄色格 = 山地高地，臧霸占山攻防+30%）"
+
+## 绘制地图障碍与要塞城门（古风城堞与铁木大门）
+func _draw_obstacles() -> void:
+	for k in obstacle_nodes.keys():
+		var n: Node = obstacle_nodes[k]
+		if n and is_instance_valid(n):
+			n.queue_free()
+	obstacle_nodes.clear()
+
+	if not chapter.has("map") or not chapter["map"].has("obstacles"):
+		return
+	for o in chapter["map"]["obstacles"]:
+		var pos := Vector2i(int(o.x), int(o.y))
+		var is_gate: bool = bool(o.get("is_gate", false)) or (chapter_id == "chapter1" and pos.x == 6 and pos.y == 4)
+		var obs_node := Node2D.new()
+		obs_node.position = _cell_to_px(pos)
+		obs_node.z_index = 8
+
+		# 底板石板/木纹
+		var rect := ColorRect.new()
+		rect.size = Vector2(TILE - 4.0, TILE - 4.0)
+		rect.position = Vector2(-TILE * 0.5 + 2.0, -TILE * 0.5 + 2.0)
+		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if is_gate:
+			rect.color = Color(0.45, 0.25, 0.14, 0.95) # 铁木城门色
+		else:
+			rect.color = Color(0.30, 0.32, 0.36, 0.92) # 青石城楼色
+		obs_node.add_child(rect)
+
+		# 边框与文字标识
+		var lbl := Label.new()
+		lbl.text = "🚪关门" if is_gate else "🧱寨墙"
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.size = Vector2(TILE, TILE)
+		lbl.position = Vector2(-TILE * 0.5, -TILE * 0.5)
+		lbl.add_theme_font_size_override("font_size", 13 if is_gate else 12)
+		lbl.add_theme_color_override("font_color", Color(1.0, 0.88, 0.45) if is_gate else Color(0.85, 0.85, 0.88))
+		obs_node.add_child(lbl)
+
+		map_root.add_child(obs_node)
+		obstacle_nodes[pos] = obs_node
 
 func _ready_init_title() -> void:
 	if chapter.has("title"):
@@ -1217,7 +1261,10 @@ func _cmd_mount(target: BattleUnitScript) -> void:
 		var target_node: Node2D = unit_nodes.get(target.id)
 		if target_node:
 			target_node.visible = false
-		info_label.text = "【%s】与【%s】合体！化身全图疾驰战车！（移动力提升至 %d，奔跑蓄力效率翻倍！）" % [u.name, target.name, _get_unit_mov(u)]
+		_spawn_banner("🐎 关羽骑赵云天下无敌！双人开火！", Color(0.2, 0.85, 1.0))
+		_shake_camera(5.0)
+		_spawn_float_text(u.cell, "🐎 关羽骑赵云！双人合击！", Color(0.3, 0.9, 1.0), true)
+		info_label.text = "【%s】骑上【%s】！化身全图疾驰战车！（移动力提升至 %d，普攻触发双人合击！）" % [u.name, target.name, _get_unit_mov(u)]
 		_sync_text(u)
 		_sync_text(target)
 		_show_command_menu()
@@ -1751,6 +1798,11 @@ func _apply_events(events: Array) -> void:
 				var ab := _unit_by_id(ev.target)
 				if ab:
 					info_label.text += "\n%s 铠甲被爆！防御减半！（只剩裤衩子…）" % ab.name
+			"exhausted":
+				var exh := _unit_by_id(ev.target)
+				if exh:
+					_spawn_float_text(exh.cell, "⚡ 铁锤沉重！力竭脱力！", Color(0.95, 0.65, 0.2))
+					info_label.text += "\n%s 挥出沉重铁锤全力猛击！陷入 1 回合力竭脱力（DEF-30%）！" % exh.name
 			"heal":
 				var he := _unit_by_id(ev.target)
 				if he:
@@ -2054,9 +2106,18 @@ func _break_sishui_gate() -> void:
 	if gate_broken:
 		return
 	gate_broken = true
-	# 瓦解城门障碍物
+	# 瓦解城门障碍物（数据与视觉节点全消除）
 	if chapter.has("map") and chapter["map"].has("obstacles"):
 		chapter["map"]["obstacles"].clear()
+	for pos in obstacle_nodes.keys():
+		var n: Node = obstacle_nodes[pos]
+		if n and is_instance_valid(n):
+			var tw := create_tween()
+			tw.tween_property(n, "scale", Vector2(0.2, 0.2), 0.35)
+			tw.parallel().tween_property(n, "modulate:a", 0.0, 0.35)
+			tw.tween_callback(n.queue_free)
+	obstacle_nodes.clear()
+
 	_big_moment("💥 汜水关城门崩塌！守军阵线溃乱！")
 	_shake_camera(12.0)
 	_screen_flash(Color(1.0, 0.9, 0.3, 0.6), 0.4)
@@ -2091,8 +2152,10 @@ func _after_action(u) -> void:
 			_sync_node(zhaoyun)
 			info_label.text += "\n赵云体魄强健无限耐力！行动后自愈 %d HP！" % healed
 
-	# 检查胜利
+	# 检查胜利与失败
 	if _check_victory():
+		return
+	if _check_defeat():
 		return
 	# 完成本行动，重置选中与命令状态
 	_finish_turn_action()
@@ -2137,6 +2200,13 @@ func _run_enemy_turn() -> void:
 			continue
 		var target: BattleUnitScript = _nearest_player(u)
 		if target == null:
+			continue
+		# 昌豨【飞龟怯战】逃窜 AI：挨打胆怯后抱头鼠窜，远离我方并哭爹喊娘
+		if u.id == "changxi" and u.coward_debuff:
+			_move_away(u, target.cell)
+			_spawn_float_text(u.cell, "😭 别打了！大哥饶命！我就是个打下手的！", Color(0.95, 0.85, 0.3), false)
+			info_label.text += "\n昌豨被吓破了胆，抱头鼠窜往后撤退！"
+			await get_tree().create_timer(0.12).timeout
 			continue
 		# 出手前高亮目标 + 短停顿，让玩家看清
 		_flash_unit(target.id, Color(1, 0.6, 0.2))
@@ -2202,14 +2272,20 @@ func _move_away(u, target_cell: Vector2i) -> void:
 		_sync_node(u)
 
 func _ai_attack(u, target) -> void:
-	# 许褚：若裸衣未激活且就绪，先激活；攻击走裸衣吸血；双倍攻速打两次
+	# 许褚：当生命值 <= 85% 或已进入激战时，气急败坏暴吼脱光只剩红裤衩！双方全员爆甲腰斩DEF + 狂暴吸血与双倍攻速！
 	if "naked_armor" in u.skill_ids:
-		if not u.lifesteal_active and u.skill_ready("naked_armor"):
+		var hp_ratio: float = float(u.hp) / float(max(u.max_hp, 1))
+		if not u.lifesteal_active and u.skill_ready("naked_armor") and (hp_ratio <= 0.85 or turn_state.turn >= 2):
+			_spawn_float_text(u.cell, "🔥 热死老子了！脱！脱光了拼命！", Color(1.0, 0.3, 0.2), true)
+			_spawn_banner("许褚气急败坏！脱得只剩一条红裤衩！！", Color(1.0, 0.4, 0.2))
+			_shake_camera(8.0)
 			_apply_events(SkillsCore.do_naked_armor(u, units))
-			info_label.text += "\n许褚！裸衣！死战！！爆甲+吸血+双倍攻速！"
-		_apply_events(SkillsCore.do_naked_strike(u, target))
+			info_label.text += "\n许褚！气急败坏脱得只剩红裤衩！双方全员爆甲腰斩DEF+吸血狂战！"
 		if u.lifesteal_active:
+			_apply_events(SkillsCore.do_naked_strike(u, target))
 			_apply_events(SkillsCore.do_naked_strike(u, target))  # 双倍攻速第二击
+		else:
+			_apply_events(SkillsCore.do_attack(u, target))
 	elif "lubu_fangtian" in u.skill_ids:
 		_apply_events(SkillsCore.do_lubu_attack(u, target))
 	else:

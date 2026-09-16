@@ -176,11 +176,81 @@ func _init() -> void:
 		printerr("  [FAIL] 士气修正未能正确改变单位实际攻防")
 		failed += 1
 
+	# ----------------------------------------------------
+	# 8. 测试武安国【巨力平准化与脱力机制】（杜绝开局单杀吕布）
+	# ----------------------------------------------------
+	var wuanguo = BattleUnitScript.from_data({
+		"id": "wuanguo", "name": "武安国", "cls": "刀将", "camp": "player",
+		"hp": 160, "atk": 30, "def": 12, "mov": 3, "rng": 1, "skills": ["wuanguo_power"]
+	}, Vector2i(1, 1))
+	# 攻击力平准化为 30 * 1.5 = 45（不再是崩坏的 90！）
+	if wuanguo.effective_atk() == 45:
+		print("  [PASS] 武安国重锤巨力平准化: ATK 30 -> 45 (1.5倍健康爆发，不喧宾夺主)")
+		passed += 1
+	else:
+		printerr("  [FAIL] 武安国攻击力异常: %d" % wuanguo.effective_atk())
+		failed += 1
+	# 挥锤攻击后陷入脱力力竭状态（DEF -30%）
+	SkillsCore.do_attack(wuanguo, dummy_enemy)
+	if wuanguo.exhausted and wuanguo.effective_def() == int(round(12.0 * 0.7)): # 8
+		print("  [PASS] 武安国挥锤后脱力力竭生效: exhausted=true, DEF 12 -> %d" % wuanguo.effective_def())
+		passed += 1
+	else:
+		printerr("  [FAIL] 武安国脱力未生效: exhausted=%s, def=%d" % [str(wuanguo.exhausted), wuanguo.effective_def()])
+		failed += 1
+	wuanguo.end_turn()
+	if not wuanguo.exhausted and wuanguo.effective_def() == 12:
+		print("  [PASS] 武安国回合结束恢复脱力: exhausted=false, DEF恢复为 12")
+		passed += 1
+	else:
+		printerr("  [FAIL] 武安国脱力恢复失败")
+		failed += 1
+
+	# ----------------------------------------------------
+	# 9. 测试许褚【裸衣死战】双向爆甲机制（原著红裤衩狂暴互秒）
+	# ----------------------------------------------------
+	var xuchu = BattleUnitScript.from_data({
+		"id": "xuchu", "name": "许褚", "cls": "步将", "camp": "enemy",
+		"hp": 280, "atk": 36, "def": 16, "mov": 3, "rng": 1, "skills": ["naked_armor"]
+	}, Vector2i(5, 5))
+	var player_soldier = BattleUnitScript.from_data({
+		"id": "p_soldier", "name": "我军盾卫", "cls": "步兵", "camp": "player",
+		"hp": 100, "atk": 20, "def": 14, "mov": 3, "rng": 1, "skills": []
+	}, Vector2i(5, 6))
+	SkillsCore.do_naked_armor(xuchu, [xuchu, player_soldier])
+	# 检验双方均爆甲（DEF减半）
+	if xuchu.armor_broken and player_soldier.armor_broken and xuchu.effective_def() == 8 and player_soldier.effective_def() == 7:
+		print("  [PASS] 许褚裸衣双向爆甲: 许褚自身DEF 16->8，我方DEF 14->7，原著红裤衩狂暴对决成立")
+		passed += 1
+	else:
+		printerr("  [FAIL] 裸衣双向爆甲异常: xuchu_broken=%s, def=%d; p_broken=%s, def=%d" % [
+			str(xuchu.armor_broken), xuchu.effective_def(),
+			str(player_soldier.armor_broken), player_soldier.effective_def()
+		])
+		failed += 1
+
+	# ----------------------------------------------------
+	# 10. 测试汜水关中轴关隘防线配置（x=6 设立关门阻断）
+	# ----------------------------------------------------
+	var ch1_file = FileAccess.open("res://data/chapters/chapter1.json", FileAccess.READ)
+	var ch1_json = JSON.parse_string(ch1_file.get_as_text())
+	var has_gate_at_6_4 := false
+	for o in ch1_json["map"]["obstacles"]:
+		if int(o["x"]) == 6 and int(o["y"]) == 4 and bool(o.get("is_gate", false)):
+			has_gate_at_6_4 = true
+			break
+	if has_gate_at_6_4 and ch1_json["map"]["obstacles"].size() >= 5:
+		print("  [PASS] 汜水关关隘配置合规: 设立中轴关门 (6,4) 与横向关防工事")
+		passed += 1
+	else:
+		printerr("  [FAIL] 汜水关关门配置不符预期")
+		failed += 1
+
 	print("==================================================")
 	print("【TEST SUMMARY】通过: %d, 失败: %d" % [passed, failed])
 	print("==================================================")
 	if failed == 0:
-		print(">>> ALL CHAPTER 1~4 NOVEL MECHANICS TESTS PASSED! <<<")
+		print(">>> ALL CHAPTER 1~4 AUDITED MECHANICS TESTS PASSED! <<<")
 		quit(0)
 	else:
 		quit(1)

@@ -67,6 +67,10 @@ static func do_attack(caster, target) -> Array:
 	var ev: Array = [CombatCore.make_damage_event(target.id, dmg, false)]
 	if target.iron_skin:
 		ev.append({"type": "iron_skin_block", "target": target.id})
+	# 武安国铁锤猛击后脱力
+	if "wuanguo_power" in caster.skill_ids:
+		caster.exhausted = true
+		ev.append({"type": "exhausted", "target": caster.id})
 	if not target.alive:
 		ev.append({"type": "death", "target": target.id})
 	return ev
@@ -212,8 +216,8 @@ static func do_arrow_rain(caster, target, all_units: Array) -> Array:
 
 ## 许褚·裸衣死战：激活绝技
 ## 1) 爆掉周围半径2（方圆）敌军战甲（armor_broken=true）
-## 2) 许褚进入吸血状态（lifesteal_active=true）
-## 3) 提供双倍攻速（AI 据此每回合攻击两次，由调用方处理）
+## 2) 许褚自身战甲同样震碎爆飞（caster.armor_broken=true），只剩大红裤衩！
+## 3) 许褚进入狂暴吸血状态（lifesteal_active=true）与双倍攻速
 static func do_naked_armor(caster, all_units: Array) -> Array:
 	var ev: Array = []
 	var broken: Array = []
@@ -221,6 +225,9 @@ static func do_naked_armor(caster, all_units: Array) -> Array:
 		if u.alive and u.camp != caster.camp and GridCore.chebyshev(u.cell, caster.cell) <= 2:
 			u.armor_broken = true
 			broken.append(u.id)
+	# 还原原著：许褚自己也爆衣赤膊只剩红裤衩，防御同样减半！
+	caster.armor_broken = true
+	broken.append(caster.id)
 	caster.lifesteal_active = true
 	caster.start_cd("naked_armor", meta("naked_armor").cd)
 	ev.append({"type": "skill", "skill_id": "naked_armor", "caster": caster.id,

@@ -318,6 +318,103 @@
       "rng": 1,
       "skills": [],
       "is_commander": false
+    },
+    {
+      "id": "caocao",
+      "name": "曹操",
+      "cls": "统帅",
+      "camp": "player",
+      "hp": 90,
+      "max_hp": 150,
+      "atk": 22,
+      "def": 12,
+      "mov": 3,
+      "rng": 1,
+      "skills": [],
+      "is_commander": false,
+      "is_protect_target": true
+    },
+    {
+      "id": "xurong",
+      "name": "徐荣",
+      "cls": "骑将",
+      "camp": "enemy",
+      "hp": 220,
+      "atk": 28,
+      "def": 14,
+      "mov": 4,
+      "rng": 1,
+      "skills": [
+        "xurong_ambush"
+      ],
+      "is_commander": true
+    },
+    {
+      "id": "xiliang_cavalry_1",
+      "name": "西凉铁骑",
+      "cls": "骑兵",
+      "camp": "enemy",
+      "hp": 75,
+      "atk": 18,
+      "def": 9,
+      "mov": 5,
+      "rng": 1,
+      "skills": [],
+      "is_commander": false
+    },
+    {
+      "id": "xiliang_cavalry_2",
+      "name": "西凉铁骑",
+      "cls": "骑兵",
+      "camp": "enemy",
+      "hp": 75,
+      "atk": 18,
+      "def": 9,
+      "mov": 5,
+      "rng": 1,
+      "skills": [],
+      "is_commander": false
+    },
+    {
+      "id": "xiliang_archer_1",
+      "name": "西凉伏兵弓手",
+      "cls": "弓兵",
+      "camp": "enemy",
+      "hp": 55,
+      "atk": 16,
+      "def": 6,
+      "mov": 3,
+      "rng": 2,
+      "skills": [],
+      "is_commander": false
+    },
+    {
+      "id": "xiliang_archer_2",
+      "name": "西凉伏兵弓手",
+      "cls": "弓兵",
+      "camp": "enemy",
+      "hp": 55,
+      "atk": 16,
+      "def": 6,
+      "mov": 3,
+      "rng": 2,
+      "skills": [],
+      "is_commander": false
+    },
+    {
+      "id": "dianwei",
+      "name": "典韦",
+      "cls": "步战",
+      "camp": "enemy",
+      "hp": 300,
+      "atk": 34,
+      "def": 14,
+      "mov": 3,
+      "rng": 1,
+      "skills": [
+        "dianwei_brute"
+      ],
+      "is_commander": true
     }
   ]
 }

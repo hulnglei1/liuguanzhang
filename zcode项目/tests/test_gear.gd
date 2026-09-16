@@ -33,22 +33,21 @@ func _init() -> void:
 	else:
 		print("[OK] 种子攻+10%生效 ✅")
 
-	# ---- 2. 武安国被动「三倍巨力」生效 ----
+	# ---- 2. 武安国被动「重锤巨力」平准化为 1.5 倍生效 ----
 	var wuanguo = BattleUnitScript.from_data(_unit_def("wuanguo"), Vector2i(0, 0))
 	var wa_atk: int = wuanguo.effective_atk()
-	if wa_atk != 90:  # 30*3=90
-		print("[FAIL] 武安国三倍巨力 ATK 应为90，实际 ", wa_atk)
+	if wa_atk != 45:  # 30*1.5=45
+		print("[FAIL] 武安国重锤巨力 ATK 应为45，实际 ", wa_atk)
 		failed += 1
 	else:
-		print("[OK] 武安国三倍巨力生效 ✅")
+		print("[OK] 武安国重锤巨力（1.5倍健康爆发）生效 ✅")
 
-	# ---- 3. 吕布连击跨回合保留（不再清零）----
+	# ---- 3. 吕布连击跨回合保留（第1、2击跨回合不清零，第3击打完循环重置）----
 	var lubu = BattleUnitScript.from_data(_unit_def("lubu"), Vector2i(0, 0))
 	SkillsCore.do_lubu_attack(lubu, guanyu)
-	SkillsCore.do_lubu_attack(lubu, guanyu)
-	SkillsCore.do_lubu_attack(lubu, guanyu)  # combo=3
+	SkillsCore.do_lubu_attack(lubu, guanyu)  # combo=2
 	lubu.end_turn()
-	if lubu.combo_strikes != 3:
+	if lubu.combo_strikes != 2:
 		print("[FAIL] 连击应跨回合保留，实际 ", lubu.combo_strikes)
 		failed += 1
 	else:

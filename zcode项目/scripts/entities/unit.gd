@@ -37,6 +37,8 @@ var iron_skin: bool = false      # 吕布两息铁皮无敌：免疫一切伤害
 var iron_skin_turns: int = 0     # 铁皮剩余回合数
 var zhaoyun_strike_count: int = 0 # 赵云普攻计数（每2次追加戳刺）
 var gate_broken_debuff: bool = false # 汜水关破门：敌DEF-20%
+var exhausted: bool = false      # 挥舞重锤脱力力竭：DEF-30%
+var is_protect_target: bool = false # 战场需誓死护卫的核心目标（阵亡直接判负）
 
 # ===== 装备/词条全局加成（P0-1 修复：让抽奖真正生效）=====
 var gear_atk: int = 0      # 兵种/武器加攻
@@ -54,7 +56,7 @@ static func from_data(d: Dictionary, spawn: Vector2i):
 	u.name = d.name
 	u.cls = d.cls
 	u.camp = d.camp
-	u.max_hp = d.hp
+	u.max_hp = d.get("max_hp", d.hp)
 	u.hp = d.hp
 	u.base_atk = d.atk
 	u.base_def = d.def
@@ -62,6 +64,7 @@ static func from_data(d: Dictionary, spawn: Vector2i):
 	u.rng = d.rng
 	u.skill_ids = (d.skills as Array).duplicate()
 	u.is_commander = d.get("is_commander", false)
+	u.is_protect_target = d.get("is_protect_target", false)
 	u.cell = spawn
 	return u
 
@@ -79,7 +82,7 @@ func effective_atk() -> int:
 		v *= _fangtian_multiplier()
 		v *= rage_multiplier
 	if "wuanguo_power" in skill_ids:
-		v *= 3.0  # 武安国·三倍巨力（P0-2 修复：原被动是死的）
+		v *= 1.5  # 武安国·重锤巨力（平准化为 1.5 倍，健康爆发力，不喧宾夺主）
 	if "king_hill" in skill_ids and on_hill:
 		v *= 1.3  # 臧霸占山为王：高地ATK+30%
 	if camp == "enemy":
@@ -92,7 +95,7 @@ func _fangtian_multiplier() -> float:
 		return 3.0
 	return 1.0
 
-## 当前实际 DEF（含士气修正；裸衣爆甲/昌豨怯战时降低，臧霸高地时提升，城门崩塌时降低）
+## 当前实际 DEF（含士气修正；裸衣爆甲/昌豨怯战时降低，臧霸高地时提升，城门崩塌时降低，脱力时降低）
 func effective_def() -> int:
 	var v: float = (float(base_def) + float(gear_def)) * morale_bonus
 	if armor_broken:
@@ -103,6 +106,8 @@ func effective_def() -> int:
 		v *= 1.3
 	if coward_debuff:
 		v *= 0.7
+	if exhausted:
+		v *= 0.7  # 挥舞沉重铁锤脱力力竭：DEF-30%
 	return int(round(v))
 
 ## 是否被眩晕
@@ -129,7 +134,7 @@ func skill_ready(skill_id: String) -> bool:
 func start_cd(skill_id: String, cd: int) -> void:
 	cds[skill_id] = cd
 
-## 回合结束：冷却-1、眩晕-1、华雄叠层+1
+## 回合结束：冷却-1、眩晕-1、华雄叠层+1、脱力恢复
 func end_turn() -> void:
 	for k in cds.keys():
 		if cds[k] > 0:
@@ -138,6 +143,8 @@ func end_turn() -> void:
 		stun_turns -= 1
 	if "hua_rage" in skill_ids and alive:
 		hua_rage_turns += 1
+	if exhausted:
+		exhausted = false
 	# 注意：吕布连击跨回合累积（end_turn 不清零），只有被打晕(fangtian_reset)才打断
 
 ## 吕布出击：推进连击计数（供敌方AI调用）
@@ -185,7 +192,7 @@ func to_dict() -> Dictionary:
 		"morale_bonus": morale_bonus, "refuse_penalty": refuse_penalty,
 		"mount": mount.duplicate(),
 		"iron_skin": iron_skin, "zhaoyun_strike_count": zhaoyun_strike_count,
-		"gate_broken_debuff": gate_broken_debuff,
+		"gate_broken_debuff": gate_broken_debuff, "exhausted": exhausted,
 	}
 
 ## 是否为骑兵系（十字4向攻击，不可斜打）

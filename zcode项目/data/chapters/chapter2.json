@@ -30,8 +30,8 @@
   "win_condition": "kill_commander",
   "lose_condition": "player_all_dead",
   "events": [
-    {"turn": 1, "type": "dialog", "key": "ch2_open", "once": true},
-    {"turn": 3, "type": "dialog", "key": "ch2_wuanguo_fall", "once": true},
-    {"turn": 4, "type": "dialog", "key": "ch2_zhangfei_roar", "once": true}
+    {"turn": 1, "type": "dialog", "key": "chapter2_open", "once": true},
+    {"turn": 3, "type": "dialog", "key": "chapter2_wuanguo_fall", "once": true},
+    {"turn": 4, "type": "dialog", "key": "chapter2_zhangfei_roar", "once": true}
   ]
 }

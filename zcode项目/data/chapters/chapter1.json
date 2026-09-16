@@ -5,16 +5,18 @@
     "w": 12,
     "h": 10,
     "obstacles": [
-      {"x": 5, "y": 2},
-      {"x": 5, "y": 7},
-      {"x": 8, "y": 4}
+      {"x": 6, "y": 2},
+      {"x": 6, "y": 3},
+      {"x": 6, "y": 4, "is_gate": true},
+      {"x": 6, "y": 5},
+      {"x": 6, "y": 6}
     ]
   },
   "player_spawn": [
     {"unit": "liubei", "x": 1, "y": 4},
     {"unit": "guanyu", "x": 2, "y": 5},
     {"unit": "zhangfei", "x": 1, "y": 6},
-    {"unit": "zhaoyun", "x": 2, "y": 3}
+    {"unit": "gongsunzan", "x": 2, "y": 3}
   ],
   "enemy_spawn": [
     {"unit": "huaxiong", "x": 10, "y": 4},
@@ -27,9 +29,9 @@
   "win_condition": "kill_commander",
   "lose_condition": "player_all_dead",
   "events": [
-    {"turn": 1, "type": "dialog", "key": "ch1_open", "once": true},
-    {"turn": 2, "type": "dialog", "key": "ch1_deserter", "once": true},
-    {"turn": 4, "type": "dialog", "key": "ch1_pressure", "once": true},
-    {"turn": 6, "type": "dialog", "key": "ch1_charge_hint", "once": true}
+    {"turn": 1, "type": "dialog", "key": "chapter1_open", "once": true},
+    {"turn": 2, "type": "dialog", "key": "chapter1_deserter", "once": true},
+    {"turn": 4, "type": "dialog", "key": "chapter1_pressure", "once": true},
+    {"turn": 6, "type": "dialog", "key": "chapter1_charge_hint", "once": true}
   ]
 }
