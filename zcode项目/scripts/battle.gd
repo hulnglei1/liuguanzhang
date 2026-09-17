@@ -2830,12 +2830,25 @@ func _check_victory_legacy() -> bool:
 
 ## 当前阶段的达成上下文
 func _build_objective_ctx() -> Dictionary:
-	var commander := _enemy_commander()
+	var snap: Dictionary = {}
+	var minions_alive := 0
+	var commander_down := false
+	for u in units:
+		if u.camp != "enemy":
+			continue
+		snap[u.id] = {"hp": u.hp, "max_hp": u.max_hp, "alive": u.alive, "is_commander": u.is_commander}
+		if not u.alive:
+			if u.is_commander:
+				commander_down = true
+		elif not u.is_commander:
+			minions_alive += 1
 	return {
-		"commander_down": commander != null and not commander.alive,
+		"commander_down": commander_down,
 		"gate_broken": gate_broken,
 		"turn": turn_state.turn,
 		"enemies_alive": _camp_units("enemy").size(),
+		"minions_alive": minions_alive,
+		"units": snap,
 	}
 
 ## 分阶段军令：逐阶段判定，全部达成才算通关

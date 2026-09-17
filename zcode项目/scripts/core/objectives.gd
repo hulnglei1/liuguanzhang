@@ -23,8 +23,41 @@ static func stage_cleared(stage: Dictionary, ctx: Dictionary) -> bool:
 			return int(ctx.get("turn", 1)) >= int(win.get("value", 1))
 		"kill_all":
 			return int(ctx.get("enemies_alive", 1)) <= 0
+		"kill_minions":
+			# 除主将外的杂兵全部清光（主将还站着，用于"先清场再单挑"这类阶段）
+			return int(ctx.get("minions_alive", 1)) <= 0
+		"kill_target":
+			return _is_down(ctx, str(win.get("target", "")))
+		"recruit_at_hp":
+			# 招降：把目标打到最后 X% 血即逼其归顺（原著里许褚是被招揽的，不是被杀）
+			# 若一击致死也算达成（剧情按"打昏后收服"处理）
+			return _hp_below(ctx, str(win.get("target", "")), float(win.get("ratio", 0.3)))
 		_:
 			return false
+
+
+static func _unit_info(ctx: Dictionary, id: String) -> Dictionary:
+	if id.is_empty():
+		return {}
+	var us: Dictionary = ctx.get("units", {})
+	return us.get(id, {})
+
+
+static func _is_down(ctx: Dictionary, id: String) -> bool:
+	var u := _unit_info(ctx, id)
+	if u.is_empty():
+		return false
+	return not bool(u.get("alive", true))
+
+
+static func _hp_below(ctx: Dictionary, id: String, ratio: float) -> bool:
+	var u := _unit_info(ctx, id)
+	if u.is_empty():
+		return false
+	if not bool(u.get("alive", true)):
+		return true
+	var mx: int = maxi(1, int(u.get("max_hp", 1)))
+	return float(int(u.get("hp", mx))) / float(mx) <= ratio
 
 
 ## 旧关卡（无 stages）兼容：按 win_condition 合成单阶段

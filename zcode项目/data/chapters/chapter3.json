@@ -1,35 +1,118 @@
 {
-  "id": "chapter3",
-  "title": "第三关 · 裸衣·裤衩子大战",
-  "prev_chapter": "chapter2",
-  "map": {
-    "w": 12,
-    "h": 10,
-    "obstacles": [
-      {"x": 4, "y": 2},
-      {"x": 5, "y": 7},
-      {"x": 7, "y": 4},
-      {"x": 8, "y": 7}
+    "id": "chapter3",
+    "title": "第三关 · 裸衣·裤衩子大战",
+    "prev_chapter": "chapter2",
+    "map": {
+        "w": 12,
+        "h": 10,
+        "obstacles": [
+            {
+                "x": 4,
+                "y": 2
+            },
+            {
+                "x": 5,
+                "y": 7
+            },
+            {
+                "x": 7,
+                "y": 4
+            },
+            {
+                "x": 8,
+                "y": 7
+            }
+        ]
+    },
+    "player_spawn": [
+        {
+            "unit": "liubei",
+            "x": 1,
+            "y": 4
+        },
+        {
+            "unit": "guanyu",
+            "x": 2,
+            "y": 5
+        },
+        {
+            "unit": "zhangfei",
+            "x": 1,
+            "y": 6
+        },
+        {
+            "unit": "zhaoyun",
+            "x": 2,
+            "y": 3
+        },
+        {
+            "unit": "gongsunzan",
+            "x": 0,
+            "y": 5
+        }
+    ],
+    "enemy_spawn": [
+        {
+            "unit": "xuchu",
+            "x": 10,
+            "y": 4
+        },
+        {
+            "unit": "luan_bing_1",
+            "x": 9,
+            "y": 3
+        },
+        {
+            "unit": "luan_bing_2",
+            "x": 9,
+            "y": 5
+        },
+        {
+            "unit": "luan_bing_3",
+            "x": 10,
+            "y": 2
+        }
+    ],
+    "morale": {
+        "player": 100,
+        "enemy": 100
+    },
+    "win_condition": "kill_commander",
+    "lose_condition": "player_all_dead",
+    "events": [
+        {
+            "turn": 1,
+            "type": "dialog",
+            "key": "chapter3_open",
+            "once": true
+        },
+        {
+            "turn": 3,
+            "type": "dialog",
+            "key": "chapter3_naked",
+            "once": true
+        }
+    ],
+    "stages": [
+        {
+            "id": "clear_minions",
+            "title": "乱军围将",
+            "objective": "肃清围困许褚的黄巾乱兵（他还没觉醒绝技，别让乱兵把他耗死）",
+            "win": {
+                "type": "kill_minions"
+            },
+            "on_clear": "乱兵溃散。许褚被逼到绝境，身上爆出一股红色战气——"
+        },
+        {
+            "id": "subdue",
+            "title": "降伏虎痴",
+            "objective": "把裸衣许褚打到【三成血以下】逼他停手——别下死手，他是要招的人！",
+            "win": {
+                "type": "recruit_at_hp",
+                "target": "xuchu",
+                "ratio": 0.3
+            },
+            "on_clear": "许褚单膝跪地归顺"
+        }
     ]
-  },
-  "player_spawn": [
-    {"unit": "liubei", "x": 1, "y": 4},
-    {"unit": "guanyu", "x": 2, "y": 5},
-    {"unit": "zhangfei", "x": 1, "y": 6},
-    {"unit": "zhaoyun", "x": 2, "y": 3},
-    {"unit": "gongsunzan", "x": 0, "y": 5}
-  ],
-  "enemy_spawn": [
-    {"unit": "xuchu", "x": 10, "y": 4},
-    {"unit": "luan_bing_1", "x": 9, "y": 3},
-    {"unit": "luan_bing_2", "x": 9, "y": 5},
-    {"unit": "luan_bing_3", "x": 10, "y": 2}
-  ],
-  "morale": {"player": 100, "enemy": 100},
-  "win_condition": "kill_commander",
-  "lose_condition": "player_all_dead",
-  "events": [
-    {"turn": 1, "type": "dialog", "key": "chapter3_open", "once": true},
-    {"turn": 3, "type": "dialog", "key": "chapter3_naked", "once": true}
-  ]
 }
