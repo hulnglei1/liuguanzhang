@@ -78,15 +78,25 @@ func _init() -> void:
 	else:
 		print("[OK] 龙斩10格 = 3.5倍")
 
-	# 9. 龙斩0格 = 0.5倍，上限clamp（15格仍3.5）
+	# 9. 龙斩0格 = 0.5倍；上限分段（15格合法=5.25，超过20格才clamp到7.0）
+	#    设计：10 格以上每格 +0.35，满 20 格 = 7.0 倍（必须"能定胜负"，否则敌人没理由打断）
 	if abs(CombatCoreScript.dragon_charge_multiplier(0) - 0.5) > 0.001:
 		print("[FAIL] 龙斩0格应为0.5，实际 ", CombatCoreScript.dragon_charge_multiplier(0))
 		failed += 1
-	if abs(CombatCoreScript.dragon_charge_multiplier(15) - 3.5) > 0.001:
-		print("[FAIL] 龙斩15格应clamp到3.5，实际 ", CombatCoreScript.dragon_charge_multiplier(15))
+	if abs(CombatCoreScript.dragon_charge_multiplier(15) - 5.25) > 0.001:
+		print("[FAIL] 龙斩15格应为5.25，实际 ", CombatCoreScript.dragon_charge_multiplier(15))
+		failed += 1
+	if abs(CombatCoreScript.dragon_charge_multiplier(20) - 7.0) > 0.001:
+		print("[FAIL] 龙斩20格应为7.0，实际 ", CombatCoreScript.dragon_charge_multiplier(20))
+		failed += 1
+	if abs(CombatCoreScript.dragon_charge_multiplier(30) - 7.0) > 0.001:
+		print("[FAIL] 龙斩超上限应clamp到7.0，实际 ", CombatCoreScript.dragon_charge_multiplier(30))
+		failed += 1
+	if CombatCoreScript.dragon_charge_cap(false) != 15 or CombatCoreScript.dragon_charge_cap(true) != 20:
+		print("[FAIL] 蓄力上限应为 不骑乘15 / 骑赵云20，实际 ", CombatCoreScript.dragon_charge_cap(false), "/", CombatCoreScript.dragon_charge_cap(true))
 		failed += 1
 	else:
-		print("[OK] 龙斩clamp正确")
+		print("[OK] 龙斩分段与上限正确（15格=5.25 / 骑赵云20格=7.0）")
 
 	# 10. 张飞吼：3轮 = 0.6×4 = 2.4倍
 	if abs(CombatCoreScript.roar_charge_multiplier(3) - 2.4) > 0.001:

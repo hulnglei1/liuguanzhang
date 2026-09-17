@@ -745,13 +745,19 @@ func _update_dashboard() -> void:
 		var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
 		dash_gimmick_title.text = "🐉 千里青龙势 · %s" % dt.name
 		dash_gimmick_title.add_theme_color_override("font_color", dt.color)
+		var cap: int = CombatCore.dragon_charge_cap(u.is_mounted())
 		var next_hint := ""
-		if u.charge >= 8 and u.charge < 10:
-			next_hint = "\n⚡ 再走 %d 格 = 【劈山裂城】质变：贯穿 4→12 格、震屏加强、可破城门！" % (10 - u.charge)
+		if u.charge >= 18 and u.charge < 20:
+			next_hint = "\n⚡ 再走 %d 格 = 传说档【裂地千里】：贯穿全图 + 破城门 + 声望！" % (20 - u.charge)
+		elif u.charge >= 8 and u.charge < 10:
+			next_hint = "\n⚡ 再走 %d 格 = 【劈山裂城】质变：贯穿 4→12 格、可破城门！" % (10 - u.charge)
 		elif u.charge < 8:
-			next_hint = "\n💡 满 10 格才是质变档（贯穿 12 格），7-9 格仍是 4 格贯穿。"
-		dash_gimmick_desc.text = "多回合逃窜蓄势: %d/10格 (倍率 %.1fx)\n💡 绕场跑图叠气势！受击气脉震散直接清零！%s" % [u.charge, CombatCore.dragon_charge_multiplier(u.charge), next_hint]
-		dash_gimmick_bar.value = u.charge * 10
+			next_hint = "\n💡 10 格可破城门，20 格（骑赵云）可贯穿全图。"
+		if u.charge >= 5:
+			var who: String = "全军" if u.charge >= 10 else "附近敌军"
+			next_hint += "\n⚠ 蓄力外泄，%s 正朝关羽扑来打断！（骑赵云可挡下第一击）" % who
+		dash_gimmick_desc.text = "多回合逃窜蓄势: %d/%d格 (倍率 %.1fx)\n💡 绕场跑图叠气势！受击气脉震散直接清零！%s" % [u.charge, cap, CombatCore.dragon_charge_multiplier(u.charge), next_hint]
+		dash_gimmick_bar.value = (float(u.charge) / float(cap)) * 100.0
 	elif "roar" in u.skill_ids:
 		dash_gimmick_title.text = "🗣️ 燕人咆哮 · 字数越多威力越大"
 		dash_gimmick_title.add_theme_color_override("font_color", Color(1.0, 0.8, 0.3))
@@ -1305,13 +1311,14 @@ func _show_command_menu() -> void:
 		var btn_skill := Button.new()
 		btn_skill.custom_minimum_size = Vector2(136, 34)
 		if skill_id == "dragon_slash":
-			# 差一格的玩家最容易被骗：明确预告满 10 格才是质变档（贯穿 12 格）
-			if u.charge >= 10:
-				btn_skill.text = "✨ 龙斩(10/10) 劈山裂城!"
-			elif u.charge >= 8:
-				btn_skill.text = "✨ 龙斩(%d/10) ⚡再%d格质变" % [u.charge, 10 - u.charge]
+			# 差一格的玩家最容易被骗：明确预告质变档（10 格破城门 / 20 格全图）
+			var cap: int = CombatCore.dragon_charge_cap(u.is_mounted())
+			if u.charge >= cap:
+				btn_skill.text = "✨ 龙斩(%d/%d) %s" % [u.charge, cap, "裂地千里!" if cap >= 20 else "劈山裂城!"]
+			elif u.charge >= cap - 2:
+				btn_skill.text = "✨ 龙斩(%d/%d) ⚡再%d格质变" % [u.charge, cap, cap - u.charge]
 			else:
-				btn_skill.text = "✨ 龙斩(%d/10)" % u.charge
+				btn_skill.text = "✨ 龙斩(%d/%d)" % [u.charge, cap]
 		elif skill_id == "roar":
 			btn_skill.text = "✨ 咆哮·连点喊字%s" % ("" if ready else "(CD)")
 		else:
@@ -1644,13 +1651,25 @@ func _do_move(cell: Vector2i) -> void:
 	# 关羽蓄力：移动格数 = 蓄力值（骑乘效率×2）
 	if "dragon_slash" in u.skill_ids:
 		var eff := SkillsCore.mounted_charge_efficiency() if u.is_mounted() else 1
+		var cap: int = CombatCore.dragon_charge_cap(u.is_mounted())
 		var old_charge: int = u.charge
-		u.charge = clampi(u.charge + moved_cells * eff, 0, 10)
+		u.charge = clampi(u.charge + moved_cells * eff, 0, cap)
 		move_gained_charge = u.charge - old_charge
 		var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
-		info_label.text = "关羽多回合逃窜蓄力 → %d/10【%s】！跑得越远，青龙越巨！" % [u.charge, dt.name]
-		if u.charge >= 10:
-			_spawn_float_text(cell, "🐉 劈山裂城！百丈真龙显圣！", Color(0.2, 1.0, 0.4), true)
+		var cap_hint: String = "（骑赵云可蓄到 20 格）" if not u.is_mounted() else "（合体上限 20 格）"
+		info_label.text = "关羽多回合逃窜蓄力 → %d/%d【%s】倍率 %.1fx！%s" % [u.charge, cap, dt.name, CombatCore.dragon_charge_multiplier(u.charge), cap_hint]
+		if u.charge >= cap:
+			if cap >= 20:
+				_spawn_float_text(cell, "🐉 裂地千里！苍龙真身横扫全图！", Color(0.15, 1.0, 0.6), true)
+				_spawn_banner("🐉 传说档【裂地千里】· 贯穿全图 + 破城门！", Color(0.15, 1.0, 0.6))
+			else:
+				_spawn_float_text(cell, "🐉 劈山裂城！百丈真龙显圣！", Color(0.2, 1.0, 0.4), true)
+				_spawn_banner("⚡ 骑上赵云可继续蓄到 20 格 → 传说档【裂地千里】", Color(1.0, 0.88, 0.35))
+		elif u.charge >= 18:
+			_spawn_float_text(cell, "⚡ 苍龙将成！再走 %d 格【裂地千里】！" % (20 - u.charge), Color(1.0, 0.9, 0.3), true)
+			_spawn_banner("⚡ 再走 %d 格 = 传说档【裂地千里】· 贯穿全图 + 破城门（当前 %.1fx）" % [20 - u.charge, dt.mult], Color(1.0, 0.88, 0.35))
+		elif u.charge >= 10:
+			_spawn_float_text(cell, "🐉 劈山裂城！百丈青龙真身降世！", Color(0.2, 1.0, 0.45), true)
 		elif u.charge >= 8:
 			# 高光预告：把「满 10 格才质变」提前告诉玩家，避免 9 格打出小水花的被欺骗感
 			_spawn_float_text(cell, "⚡ 青龙欲裂！再走 %d 格解锁【劈山裂城】！" % (10 - u.charge), Color(1.0, 0.9, 0.3), true)
@@ -1935,11 +1954,17 @@ func _apply_events(events: Array) -> void:
 					info_label.text += "\n%s 受到 %d 伤害！" % [t.name, ev.value]
 
 					# 关羽千里逃窜蓄力被打断机制（契合原著小说：受击气脉震散，全部清零）
+					# 例外：骑赵云时赵云会硬扛第一击（原著里赵云扛着关羽狂奔，敌人追不上）
 					if t.id == "guanyu" and t.charge > 0:
-						t.charge = 0
-						_spawn_float_text(t.cell, "💥 气脉震散！蓄力清零(归0)！", Color(1.0, 0.25, 0.25), true)
-						info_label.text += "\n关羽遭敌截击气脉震散！青龙蓄力全部清零！快派大哥三弟挡刀！"
-						_sync_text(t)
+						if t.is_mounted() and not t.dragon_guard_used:
+							t.dragon_guard_used = true
+							_spawn_float_text(t.cell, "🐎 赵云硬扛！青龙蓄力未散！", Color(0.5, 1.0, 0.85), true)
+							info_label.text += "\n赵云替关羽挡下这一击，气脉未散！（合体护航每关仅一次）"
+						else:
+							t.charge = 0
+							_spawn_float_text(t.cell, "💥 气脉震散！蓄力清零(归0)！", Color(1.0, 0.25, 0.25), true)
+							info_label.text += "\n关羽遭敌截击气脉震散！青龙蓄力全部清零！快派大哥三弟挡刀！"
+							_sync_text(t)
 
 					# 昌豨怯战：受击后DEF-30%
 					if "feigui" in t.skill_ids and not t.coward_debuff:
@@ -2396,6 +2421,12 @@ func _break_sishui_gate() -> void:
 			e.gate_broken_debuff = true
 			_spawn_float_text(e.cell, "🛡️ 防线溃乱 DEF-20%", Color(1.0, 0.4, 0.4))
 	_adjust_morale(30, -30)
+	# 破门夺关：即刻结算声望（原著霸业系统：占郡即得声望 → 抽奖 → 变强，这才是破城的价值）
+	var save: Dictionary = SaveCore.load_state()
+	SaveCore.add_prestige(save, 500)
+	SaveCore.save_state(save)
+	_spawn_banner("🏯 破门夺关！军功声望 +500", Color(1.0, 0.9, 0.4))
+	info_label.text += "\n🏯 破门夺关！军功声望 +500（回主城可抽奖）"
 
 ## 动态士气调整系统：双方士气（0~150，基准100）
 func _adjust_morale(player_delta: int, enemy_delta: int) -> void:
@@ -2467,7 +2498,7 @@ func _run_enemy_turn() -> void:
 			continue
 		if u.is_stunned():
 			continue
-		var target: BattleUnitScript = _nearest_player(u)
+		var target: BattleUnitScript = _pick_enemy_target(u)
 		if target == null:
 			continue
 		# 昌豨【飞龟怯战】逃窜 AI：挨打胆怯后抱头鼠窜，远离我方并哭爹喊娘
@@ -2508,6 +2539,18 @@ func _run_enemy_turn() -> void:
 		u.end_turn()
 	TurnCore.to_player(turn_state)
 	_begin_player_turn()
+
+## 敌军选目标：关羽蓄力越高越「拉仇恨」（原著里李儒专门派人拦路打断他的蓄力）
+##   charge ≥ 10：全军扑关羽（无视距离）—— 因为这一刀真的能清场，值得所有人拼命
+##   charge ≥ 5 ：关羽附近 6 格内的敌军才会被吸引过去
+## 这就是「嘲讽」：不需要额外的技能按钮，蓄力本身就是最大的挑衅
+func _pick_enemy_target(u) -> BattleUnitScript:
+	var gy: BattleUnitScript = _unit_by_id("guanyu")
+	if gy != null and gy.alive and gy.charge >= 5:
+		var pull_range: int = 999 if gy.charge >= 10 else 6
+		if GridCore.manhattan(u.cell, gy.cell) <= pull_range:
+			return gy
+	return _nearest_player(u)
 
 func _nearest_player(u) -> BattleUnitScript:
 	var best = null
