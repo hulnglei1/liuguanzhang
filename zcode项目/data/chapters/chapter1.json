@@ -1,37 +1,132 @@
 {
-  "id": "ch1_huaxiong",
-  "title": "第一关 · 逃兵·温酒斩华雄",
-  "map": {
-    "w": 12,
-    "h": 10,
-    "obstacles": [
-      {"x": 10, "y": 2},
-      {"x": 10, "y": 3},
-      {"x": 10, "y": 4, "is_gate": true},
-      {"x": 10, "y": 5},
-      {"x": 10, "y": 6}
+    "id": "ch1_huaxiong",
+    "title": "第一关 · 逃兵·温酒斩华雄",
+    "map": {
+        "w": 12,
+        "h": 10,
+        "obstacles": [
+            {
+                "x": 10,
+                "y": 2
+            },
+            {
+                "x": 10,
+                "y": 3
+            },
+            {
+                "x": 10,
+                "y": 4,
+                "is_gate": true
+            },
+            {
+                "x": 10,
+                "y": 5
+            },
+            {
+                "x": 10,
+                "y": 6
+            }
+        ]
+    },
+    "player_spawn": [
+        {
+            "unit": "liubei",
+            "x": 1,
+            "y": 4
+        },
+        {
+            "unit": "guanyu",
+            "x": 2,
+            "y": 5
+        },
+        {
+            "unit": "zhangfei",
+            "x": 1,
+            "y": 6
+        },
+        {
+            "unit": "gongsunzan",
+            "x": 2,
+            "y": 3
+        }
+    ],
+    "enemy_spawn": [
+        {
+            "unit": "huaxiong",
+            "x": 7,
+            "y": 4
+        },
+        {
+            "unit": "dao_bing_1",
+            "x": 5,
+            "y": 4
+        },
+        {
+            "unit": "dao_bing_2",
+            "x": 6,
+            "y": 4
+        },
+        {
+            "unit": "gong_bing_1",
+            "x": 7,
+            "y": 2
+        },
+        {
+            "unit": "gong_bing_2",
+            "x": 7,
+            "y": 6
+        }
+    ],
+    "morale": {
+        "player": 100,
+        "enemy": 100
+    },
+    "win_condition": "kill_commander",
+    "lose_condition": "player_all_dead",
+    "events": [
+        {
+            "turn": 1,
+            "type": "dialog",
+            "key": "chapter1_open",
+            "once": true
+        },
+        {
+            "turn": 2,
+            "type": "dialog",
+            "key": "chapter1_deserter",
+            "once": true
+        },
+        {
+            "turn": 4,
+            "type": "dialog",
+            "key": "chapter1_pressure",
+            "once": true
+        },
+        {
+            "turn": 6,
+            "type": "dialog",
+            "key": "chapter1_charge_hint",
+            "once": true
+        }
+    ],
+    "stages": [
+        {
+            "id": "behead",
+            "title": "温酒斩华雄",
+            "objective": "斩杀关前列阵的【华雄】（他每斩一将叠一层力量，拖得越久越强）",
+            "win": {
+                "type": "kill_commander"
+            },
+            "on_clear": "华雄落马！汜水关守军士气崩了——但关门还堵着，袁绍下令：全军出击，攻城！"
+        },
+        {
+            "id": "breach",
+            "title": "劈关夺门",
+            "objective": "关羽【千里青龙斩】蓄满 10 格，对准城门格劈开汜水关",
+            "win": {
+                "type": "break_gate"
+            },
+            "on_clear": "汜水关城门轰然崩塌！"
+        }
     ]
-  },
-  "player_spawn": [
-    {"unit": "liubei", "x": 1, "y": 4},
-    {"unit": "guanyu", "x": 2, "y": 5},
-    {"unit": "zhangfei", "x": 1, "y": 6},
-    {"unit": "gongsunzan", "x": 2, "y": 3}
-  ],
-  "enemy_spawn": [
-    {"unit": "huaxiong", "x": 7, "y": 4},
-    {"unit": "dao_bing_1", "x": 5, "y": 4},
-    {"unit": "dao_bing_2", "x": 6, "y": 4},
-    {"unit": "gong_bing_1", "x": 7, "y": 2},
-    {"unit": "gong_bing_2", "x": 7, "y": 6}
-  ],
-  "morale": {"player": 100, "enemy": 100},
-  "win_condition": "kill_commander",
-  "lose_condition": "player_all_dead",
-  "events": [
-    {"turn": 1, "type": "dialog", "key": "chapter1_open", "once": true},
-    {"turn": 2, "type": "dialog", "key": "chapter1_deserter", "once": true},
-    {"turn": 4, "type": "dialog", "key": "chapter1_pressure", "once": true},
-    {"turn": 6, "type": "dialog", "key": "chapter1_charge_hint", "once": true}
-  ]
 }

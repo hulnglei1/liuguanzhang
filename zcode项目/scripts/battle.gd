@@ -16,6 +16,7 @@ const SaveCore := preload("res://scripts/systems/save.gd")
 const BondsCore := preload("res://scripts/systems/bonds.gd")
 const PortraitLoaderCore := preload("res://scripts/ui/portrait_loader.gd")
 const UnitArtLoaderCore := preload("res://scripts/ui/unit_art.gd")
+const ObjectivesCore := preload("res://scripts/core/objectives.gd")
 
 const TILE := 52.0          # 格子像素（升级为52以充实画面）
 const MAP_OFFSET := Vector2(24.0, 66.0) # 棋盘左上角偏移
@@ -87,6 +88,8 @@ var morale: Dictionary = {"player": 100, "enemy": 100}
 var refuse_penalty_active := false
 var victory := false
 var gate_broken := false
+var stages: Array = []           # 曹操传式分阶段军令（数据来自 chapter["stages"]）
+var stage_idx: int = 0           # 当前阶段下标
 var obstacle_nodes: Dictionary = {}
 var active_arrows: Array = []          # 战场中正在飞行的回旋飞弹
 var arrow_nodes: Dictionary = {}       # arrow_id -> Node2D（飞弹视觉节点）
@@ -660,8 +663,10 @@ func _update_chapter_objectives() -> void:
 	var c_hp_str := " (HP: %d/%d)" % [commander.hp, commander.max_hp] if (commander and commander.alive) else ""
 
 	if commander and not commander.alive:
-		dash_primary_obj.text = "🎉 敌将已被击溃！大获全胜！"
-		return
+		# 分阶段军令下：主将死了但如果还有后续阶段（如第 1 关还要破城门），不能显示"大获全胜"
+		if stages.is_empty() or stage_idx >= stages.size() - 1:
+			dash_primary_obj.text = "🎉 敌将已被击溃！大获全胜！"
+			return
 
 	match chapter_id:
 		"chapter1":
@@ -684,6 +689,17 @@ func _update_chapter_objectives() -> void:
 			dash_primary_obj.text = "🎯 主要军令：斩杀敌方主将【%s】%s" % [c_name, c_hp_str]
 			dash_secondary_obj.text = "⭐ 战术目标：全歼敌军或斩首敌将"
 			dash_tips_content.text = "• 活用走位与技能配合，取得战役胜利！"
+
+	# 分阶段军令（曹操传式）：用当前阶段目标覆盖主/副标题，tips 保留各关的机制说明
+	if not stages.is_empty():
+		var st: Dictionary = stages[clampi(stage_idx, 0, stages.size() - 1)]
+		var total_str: String = "" if stages.size() <= 1 else "（第 %d/%d 阶段）" % [stage_idx + 1, stages.size()]
+		dash_primary_obj.text = "🎯 %s%s：%s" % [str(st.get("title", "军令")), total_str, str(st.get("objective", ""))]
+		if ObjectivesCore.has_next(stages, stage_idx):
+			var nxt: Dictionary = stages[stage_idx + 1]
+			dash_secondary_obj.text = "⏭ 预备军令：%s —— %s" % [str(nxt.get("title", "")), str(nxt.get("objective", ""))]
+		else:
+			dash_secondary_obj.text = "⭐ 最终军令：达成后占郡结算 +1000 声望"
 
 	# 将缘（羁绊）：上阵阵容命中原著组合时，把效果写在面板上，别让玩家猜
 	if active_bonds.size() > 0:
@@ -748,13 +764,13 @@ func _update_dashboard() -> void:
 		var cap: int = CombatCore.dragon_charge_cap(u.is_mounted())
 		var next_hint := ""
 		if u.charge >= 18 and u.charge < 20:
-			next_hint = "\n⚡ 再走 %d 格 = 传说档【裂地千里】：贯穿全图 + 破城门 + 声望！" % (20 - u.charge)
+			next_hint = "\n⚡ 再走 %d 格 = 传说档【裂地千里】：沿直线贯穿 + 破城门 + 声望！" % (20 - u.charge)
 		elif u.charge >= 8 and u.charge < 10:
 			next_hint = "\n⚡ 再走 %d 格 = 【劈山裂城】质变：贯穿 4→12 格、可破城门！" % (10 - u.charge)
 		elif u.charge < 8:
-			next_hint = "\n💡 10 格可破城门，20 格（骑赵云）可贯穿全图。"
+			next_hint = "\n💡 10 格可破城门，20 格（骑赵云）可沿直线一路贯穿到底。"
 		if u.charge >= 5:
-			var who: String = "全军" if u.charge >= 10 else "附近敌军"
+			var who: String = "10 格内敌军" if u.charge >= 10 else "附近敌军"
 			next_hint += "\n⚠ 蓄力外泄，%s 正朝关羽扑来打断！（骑赵云可挡下第一击）" % who
 		dash_gimmick_desc.text = "多回合逃窜蓄势: %d/%d格 (倍率 %.1fx)\n💡 绕场跑图叠气势！受击气脉震散直接清零！%s" % [u.charge, cap, CombatCore.dragon_charge_multiplier(u.charge), next_hint]
 		dash_gimmick_bar.value = (float(u.charge) / float(cap)) * 100.0
@@ -804,6 +820,13 @@ func _load_chapter() -> void:
 	var dl_file: String = "res://data/dialogs/%s_dialogs.json" % chapter_id
 	chapter = _load_json(ch_file)
 	dialogs = _load_json(dl_file)
+	# 分阶段军令（曹操传式）：关卡没写 stages 时按 win_condition 合成单阶段，保证旧数据兼容
+	var raw_stages = chapter.get("stages", [])
+	if typeof(raw_stages) == TYPE_ARRAY and not (raw_stages as Array).is_empty():
+		stages = raw_stages
+	else:
+		stages = ObjectivesCore.build_default_stages(str(chapter.get("win_condition", "kill_commander")))
+	stage_idx = 0
 	# 解包 {"dialogs":{...}} 外壳（P0 修复：此前未解包导致剧情对白/胜利结算/声望图鉴全断）
 	if dialogs.has("dialogs") and typeof(dialogs["dialogs"]) == TYPE_DICTIONARY:
 		dialogs = dialogs["dialogs"]
@@ -1311,7 +1334,7 @@ func _show_command_menu() -> void:
 		var btn_skill := Button.new()
 		btn_skill.custom_minimum_size = Vector2(136, 34)
 		if skill_id == "dragon_slash":
-			# 差一格的玩家最容易被骗：明确预告质变档（10 格破城门 / 20 格全图）
+			# 差一格的玩家最容易被骗：明确预告质变档（10 格破城门 / 20 格沿直线贯穿到底）
 			var cap: int = CombatCore.dragon_charge_cap(u.is_mounted())
 			if u.charge >= cap:
 				btn_skill.text = "✨ 龙斩(%d/%d) %s" % [u.charge, cap, "裂地千里!" if cap >= 20 else "劈山裂城!"]
@@ -1660,14 +1683,14 @@ func _do_move(cell: Vector2i) -> void:
 		info_label.text = "关羽多回合逃窜蓄力 → %d/%d【%s】倍率 %.1fx！%s" % [u.charge, cap, dt.name, CombatCore.dragon_charge_multiplier(u.charge), cap_hint]
 		if u.charge >= cap:
 			if cap >= 20:
-				_spawn_float_text(cell, "🐉 裂地千里！苍龙真身横扫全图！", Color(0.15, 1.0, 0.6), true)
-				_spawn_banner("🐉 传说档【裂地千里】· 贯穿全图 + 破城门！", Color(0.15, 1.0, 0.6))
+				_spawn_float_text(cell, "🐉 裂地千里！苍龙贯穿一线！", Color(0.15, 1.0, 0.6), true)
+				_spawn_banner("🐉 传说档【裂地千里】· 沿直线贯穿 + 破城门！", Color(0.15, 1.0, 0.6))
 			else:
 				_spawn_float_text(cell, "🐉 劈山裂城！百丈真龙显圣！", Color(0.2, 1.0, 0.4), true)
 				_spawn_banner("⚡ 骑上赵云可继续蓄到 20 格 → 传说档【裂地千里】", Color(1.0, 0.88, 0.35))
 		elif u.charge >= 18:
 			_spawn_float_text(cell, "⚡ 苍龙将成！再走 %d 格【裂地千里】！" % (20 - u.charge), Color(1.0, 0.9, 0.3), true)
-			_spawn_banner("⚡ 再走 %d 格 = 传说档【裂地千里】· 贯穿全图 + 破城门（当前 %.1fx）" % [20 - u.charge, dt.mult], Color(1.0, 0.88, 0.35))
+			_spawn_banner("⚡ 再走 %d 格 = 传说档【裂地千里】· 沿直线贯穿 + 破城门（当前 %.1fx）" % [20 - u.charge, dt.mult], Color(1.0, 0.88, 0.35))
 		elif u.charge >= 10:
 			_spawn_float_text(cell, "🐉 劈山裂城！百丈青龙真身降世！", Color(0.2, 1.0, 0.45), true)
 		elif u.charge >= 8:
@@ -1766,6 +1789,17 @@ func _do_attack(cell: Vector2i) -> void:
 	_after_action(u)
 
 ## ---------- 技能 ----------
+## 该格是否是城门（chapter.map.obstacles 里 is_gate=true 的那个）
+func _is_gate_cell(cell: Vector2i) -> bool:
+	if gate_broken:
+		return false
+	if not chapter.has("map"):
+		return false
+	for o in chapter["map"].get("obstacles", []):
+		if int(o.get("x", -1)) == cell.x and int(o.get("y", -1)) == cell.y:
+			return bool(o.get("is_gate", false))
+	return false
+
 func _is_in_skill_range(cell: Vector2i) -> bool:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
 	var t: BattleUnitScript = _unit_at(cell)
@@ -1774,6 +1808,9 @@ func _is_in_skill_range(cell: Vector2i) -> bool:
 	if skill_id == "naked_armor":
 		return true
 	if t == null or t.camp == u.camp:
+		# 例外：关羽的千里青龙斩可以直接劈城门（第 1 关「劈关夺门」阶段）
+		if t == null and skill_id == "dragon_slash" and _is_gate_cell(cell):
+			return (cell - u.cell) in GridCore.DIRS4
 		return false
 	match skill_id:
 		"dragon_slash":
@@ -1801,6 +1838,23 @@ func _do_skill(cell: Vector2i) -> void:
 	var events: Array = []
 	match skill_id:
 		"dragon_slash":
+			# 劈城门（第 1 关「劈关夺门」阶段）：目标格是城门、没有单位
+			if t == null and _is_gate_cell(cell):
+				if u.charge >= 10:
+					_big_moment("🐉 千里青龙斩 · 劈关夺门！！")
+					_spawn_float_text(cell, "🐉 青龙撞门！", Color(0.3, 1.0, 0.5), true)
+					_shake_camera(10.0)
+					_break_sishui_gate()
+					u.charge = 0
+				else:
+					_spawn_float_text(cell, "🔨 力道不足！", Color(1.0, 0.6, 0.3), true)
+					info_label.text = "汜水关城门厚重！【千里青龙斩】需蓄满 10 格才能一击劈开（当前 %d 格）" % u.charge
+				u.acted = true
+				move_origin_cell = Vector2i(-1, -1)
+				move_gained_charge = 0
+				_sync_text(u)
+				_after_action(u)
+				return
 			var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
 			var line_len: int = int(dt.get("line_len", 1))
 			var line_path: Array[Vector2i] = GridCore.line_cells(u.cell, t.cell, line_len, MAP_W, MAP_H)
@@ -2541,13 +2595,14 @@ func _run_enemy_turn() -> void:
 	_begin_player_turn()
 
 ## 敌军选目标：关羽蓄力越高越「拉仇恨」（原著里李儒专门派人拦路打断他的蓄力）
-##   charge ≥ 10：全军扑关羽（无视距离）—— 因为这一刀真的能清场，值得所有人拼命
-##   charge ≥ 5 ：关羽附近 6 格内的敌军才会被吸引过去
+##   charge ≥ 10：关羽 10 格内的敌军扑向他（地图 12x10，实际就是大半个战场）
+##   charge ≥ 5 ：关羽 6 格内的敌军才会被吸引过去
+## 远处敌人不跨越全图来凑热闹 —— 那样反而假，玩家也不服气
 ## 这就是「嘲讽」：不需要额外的技能按钮，蓄力本身就是最大的挑衅
 func _pick_enemy_target(u) -> BattleUnitScript:
 	var gy: BattleUnitScript = _unit_by_id("guanyu")
 	if gy != null and gy.alive and gy.charge >= 5:
-		var pull_range: int = 999 if gy.charge >= 10 else 6
+		var pull_range: int = 10 if gy.charge >= 10 else 6
 		if GridCore.manhattan(u.cell, gy.cell) <= pull_range:
 			return gy
 	return _nearest_player(u)
@@ -2755,6 +2810,12 @@ func _draw_cells(cells, color: Color) -> void:
 func _check_victory() -> bool:
 	if victory:
 		return true
+	if stages.is_empty():
+		return _check_victory_legacy()
+	return _check_stages()
+
+## 无 stages 数据时的旧逻辑（向后兼容）
+func _check_victory_legacy() -> bool:
 	var commander := _enemy_commander()
 	if commander and not commander.alive:
 		victory = true
@@ -2766,6 +2827,49 @@ func _check_victory() -> bool:
 		_show_win_dialog()
 		return true
 	return false
+
+## 当前阶段的达成上下文
+func _build_objective_ctx() -> Dictionary:
+	var commander := _enemy_commander()
+	return {
+		"commander_down": commander != null and not commander.alive,
+		"gate_broken": gate_broken,
+		"turn": turn_state.turn,
+		"enemies_alive": _camp_units("enemy").size(),
+	}
+
+## 分阶段军令：逐阶段判定，全部达成才算通关
+func _check_stages() -> bool:
+	var st: Dictionary = stages[clampi(stage_idx, 0, stages.size() - 1)]
+	if not ObjectivesCore.stage_cleared(st, _build_objective_ctx()):
+		return false
+	return _advance_stage()
+
+## 当前阶段达成 → 播报 → 进入下一阶段；已是最后一阶段则通关
+func _advance_stage() -> bool:
+	var cur: Dictionary = stages[stage_idx]
+	_spawn_banner("✅ 军令达成 · %s" % str(cur.get("title", "")), Color(0.4, 1.0, 0.6))
+	if ObjectivesCore.has_next(stages, stage_idx):
+		stage_idx += 1
+		var nxt: Dictionary = stages[stage_idx]
+		var hint: String = str(cur.get("on_clear", ""))
+		if hint != "":
+			info_label.text = hint
+		_update_chapter_objectives()
+		_update_dashboard()
+		var banner_text: String = "🎯 新军令 · %s" % str(nxt.get("title", ""))
+		var next_text: String = ObjectivesCore.progress_text(stages, stage_idx)
+		get_tree().create_timer(1.1).timeout.connect(func() -> void:
+			_spawn_banner(banner_text, Color(1.0, 0.9, 0.4))
+			info_label.text += "\n" + next_text)
+		return false
+	victory = true
+	var commander := _enemy_commander()
+	if commander and not commander.alive:
+		_handle_commander_defeat(commander)
+	else:
+		_show_win_dialog()
+	return true
 
 func _handle_commander_defeat(commander: BattleUnitScript) -> void:
 	var remaining_minions: Array = []

@@ -26,19 +26,32 @@ func _process(_dt: float) -> bool:
 		return false
 	if frames == 12 and step == 1:
 		step = 2
-		_kill_commander()          # 触发异步胜利（主帅溃逃演出→胜利对白）
+		_kill_commander()          # 阶段1：斩华雄（此后应进入阶段2，不应直接通关）
 		return false
-	if step == 2 and battle.dialog_showing and battle.pending_dialog.size() > 0 and frames > 60:
-		# 胜利对白已弹出（异步完成），记录并推进到结算
-		print("[OK] 胜利对白已播放（异步胜利流程）✅")
+	if step == 2 and frames > 40:
+		# 阶段 1 达成 → 应进入阶段 2「劈关夺门」，此时尚未胜利
+		if battle.victory:
+			print("[FAIL] 只斩华雄不应直接通关（还有「劈关夺门」阶段）")
+			failed += 1
+		elif int(battle.stage_idx) == 1:
+			print("[OK] 阶段1「温酒斩华雄」达成，进入阶段2「劈关夺门」✅")
+		else:
+			print("[FAIL] 阶段未推进，stage_idx=", battle.stage_idx)
+			failed += 1
+		_breach_gate()
 		step = 3
+		return false
+	if step == 3 and battle.dialog_showing and battle.pending_dialog.size() > 0 and frames > 90:
+		# 胜利对白已弹出（异步完成），记录并推进到结算
+		print("[OK] 劈开城门后胜利对白已播放（异步胜利流程）✅")
+		step = 4
 		# 跳过胜利对白
 		battle.pending_dialog = []
 		battle.dialog_showing = false
 		battle.dialog_box.visible = false
 		_start_settle()
 		return false
-	if step == 3:
+	if step == 4:
 		# 汇总（结算已同步执行）
 		if failed == 0:
 			print("==== 端到端通关链路测试通过 ✅ ====")
@@ -46,7 +59,7 @@ func _process(_dt: float) -> bool:
 			print("==== 端到端测试失败 ", failed, " 项 ❌ ====")
 		_clean_save()
 		return true
-	if frames > 150:
+	if frames > 220:
 		# 超时保护
 		if failed == 0:
 			print("==== 端到端测试超时未完成（胜利对白未弹出）❌ ====")
@@ -63,7 +76,33 @@ func _kill_commander() -> void:
 	if hx:
 		hx.hp = 0
 		hx.alive = false
-	battle._check_victory()  # 新版：进入异步胜利流程
+	battle._check_victory()  # 阶段1：应推进到阶段2，而不是通关
+
+## 阶段2「劈关夺门」：关羽蓄满 10 格，把青龙斩劈在城门格上
+func _breach_gate() -> void:
+	battle.pending_dialog = []
+	battle.dialog_showing = false
+	battle.dialog_box.visible = false
+	var gy = battle._unit_by_id("guanyu")
+	if gy == null:
+		print("[FAIL] 找不到关羽")
+		failed += 1
+		return
+	gy.cell = Vector2i(9, 4)          # 城门前一格
+	gy.charge = 10                     # 满蓄力
+	battle.selected_id = "guanyu"
+	battle._do_skill(Vector2i(10, 4))  # 对准城门格释放
+	if battle.gate_broken:
+		print("[OK] 关羽蓄满 10 格青龙斩劈开城门 ✅")
+	else:
+		print("[FAIL] 城门未被劈开（gate_broken=false）")
+		failed += 1
+	battle._check_victory()
+	if battle.victory:
+		print("[OK] 两阶段军令全部达成 → 通关 ✅")
+	else:
+		print("[FAIL] 破门后仍未通关")
+		failed += 1
 
 ## A) 开局剧情对白应能正常播放（修复核心）
 func _test_open_dialog_plays() -> void:

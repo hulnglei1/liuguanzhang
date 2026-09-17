@@ -57,26 +57,40 @@ func _run_scene_check() -> void:
 
 	var gy = b._unit_by_id("guanyu")
 	var lb = b._unit_by_id("lubu")
-	print("\n==== 二、蓄力嘲讽验证（敌军目标选择） ====")
-	# 先让关羽躲到角落，制造"他本来不是任何人的最近目标"的局面，才能验证出嘲讽是否生效
+	print("\n==== 二、蓄力嘲讽验证（只吸引范围内的敌军，不搞全平台） ====")
+	# 关羽躲到角落：全场敌人都超出 10 格吸引半径 → 不该有人被吸引
 	gy.cell = Vector2i(0, 0)
 	gy.charge = 0
 	var t0 = b._pick_enemy_target(lb)
-	print("  [蓄力 0 / 关羽躲远处] 吕布 → %s（应为我方其他人，不该是关羽）" % (t0.id if t0 else "无"))
-	gy.charge = 6
-	var t2 = b._pick_enemy_target(lb)
-	print("  [蓄力 6 / 距离超 6 格] 吕布 → %s（超出吸引半径，仍打最近的）" % (t2.id if t2 else "无"))
+	print("  [蓄力 0 ] 关羽(0,0) 吕布(%s) → %s" % [str(lb.cell), t0.id if t0 else "无"])
 	gy.charge = 12
+	var t_far = b._pick_enemy_target(lb)
+	var far_dist: int = absi(lb.cell.x - gy.cell.x) + absi(lb.cell.y - gy.cell.y)
+	print("  [蓄力 12] 距离 %d 格（>10）→ %s（超出半径，不该被吸引）" % [far_dist, t_far.id if t_far else "无"])
+
+	# 关羽走到战场中部：10 格内的敌军全部改扑关羽
+	gy.cell = Vector2i(5, 5)
 	var all_pull := true
 	var detail: Array[String] = []
 	for u in b.units:
 		if u.camp == "enemy":
 			var t = b._pick_enemy_target(u)
-			detail.append("%s→%s" % [u.id, t.id if t else "无"])
-			if t == null or t.id != "guanyu":
+			var d: int = absi(u.cell.x - gy.cell.x) + absi(u.cell.y - gy.cell.y)
+			detail.append("%s(%d格)→%s" % [u.id, d, t.id if t else "无"])
+			if d <= 10 and (t == null or t.id != "guanyu"):
 				all_pull = false
-	print("  [蓄力 12] 全军目标：", ", ".join(detail))
-	print("  [蓄力 12] 全军扑关羽？", "✅ 是（这一刀能清场，所以他们拼命来断）" if all_pull else "❌ 否")
+	print("  [蓄力 12] 关羽(5,5) 中场：", ", ".join(detail))
+	print("  [蓄力 12] 半径内敌军全扑关羽？", "✅ 是（这一刀能清场，所以他们拼命来断）" if all_pull else "❌ 否")
+
+	# 蓄力 6：只有 6 格内的才被吸引
+	gy.charge = 6
+	var near_pull: Array[String] = []
+	for u in b.units:
+		if u.camp == "enemy":
+			var t = b._pick_enemy_target(u)
+			var d: int = absi(u.cell.x - gy.cell.x) + absi(u.cell.y - gy.cell.y)
+			near_pull.append("%s(%d格)→%s" % [u.id, d, t.id if t else "无"])
+	print("  [蓄力 6 ] 吸引半径收窄到 6 格：", ", ".join(near_pull))
 
 	# 合体护航：首次受击不清零
 	print("\n==== 三、合体护航验证 ====")

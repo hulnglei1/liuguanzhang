@@ -35,9 +35,9 @@ static func dragon_charge_tier(charge: int) -> Dictionary:
 		return {
 			"tier": 5,
 			"name": "传说 · 裂地千里苍龙",
-			"title": "🐉 裂地千里！苍龙横扫全图！",
+			"title": "🐉 裂地千里！苍龙贯穿一线！",
 			"mult": dragon_charge_multiplier(c),
-			"line_len": 20,
+			"line_len": 12,
 			"width": 160.0,
 			"fx": "dragon_world_breaker",
 			"can_shatter_gate": true,

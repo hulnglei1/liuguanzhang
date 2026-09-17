@@ -79,7 +79,8 @@ static func do_attack(caster, target) -> Array:
 ## 消耗当前蓄力格数，返回事件数组；主目标（被攻击点）承受 100% 满额伤害，被攻击点身后沿线贯穿敌军承受 70% 刀气贯穿伤害
 static func do_dragon_slash(caster, target, pierced_targets: Array = []) -> Array:
 	var mult: float = CombatCore.dragon_charge_multiplier(caster.charge)
-	var full: bool = caster.charge >= 10
+	var tier: int = int(CombatCore.dragon_charge_tier(caster.charge).get("tier", 0))
+	var full: bool = tier >= 4      # 10 格以上（劈山裂城 / 裂地千里）都算满档演出
 	var dmg: int = CombatCore.damage(caster.effective_atk(), mult, target.effective_def())
 	target.take_damage(dmg)
 	var ev: Array = [
@@ -88,8 +89,8 @@ static func do_dragon_slash(caster, target, pierced_targets: Array = []) -> Arra
 		CombatCore.make_damage_event(target.id, dmg, false),
 	]
 	if full:
-		var can_shatter: bool = (target.id == "huaxiong" or target.is_commander)
-		ev.append({"type": "fx", "fx": "dragon_full_screen", "target": target.id, "shatter_gate": can_shatter})
+		# 注：破城门不再靠"打主将附带"，而是由玩家把青龙斩对准城门格触发（battle.gd 的劈门分支）
+		ev.append({"type": "fx", "fx": "dragon_full_screen", "target": target.id, "shatter_gate": false})
 		ev.append({"type": "knockback", "target": target.id, "cells": 2})
 	if not target.alive:
 		ev.append({"type": "death", "target": target.id})

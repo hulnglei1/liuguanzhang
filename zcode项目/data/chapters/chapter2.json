@@ -1,37 +1,127 @@
 {
-  "id": "ch2_lubu",
-  "title": "第二关 · 虎牢关 · 三英战吕布",
-  "prev_chapter": "ch1_huaxiong",
-  "map": {
-    "w": 12,
-    "h": 10,
-    "obstacles": [
-      {"x": 4, "y": 2},
-      {"x": 4, "y": 7},
-      {"x": 6, "y": 4},
-      {"x": 9, "y": 3},
-      {"x": 9, "y": 6}
+    "id": "ch2_lubu",
+    "title": "第二关 · 虎牢关 · 三英战吕布",
+    "prev_chapter": "ch1_huaxiong",
+    "map": {
+        "w": 12,
+        "h": 10,
+        "obstacles": [
+            {
+                "x": 4,
+                "y": 2
+            },
+            {
+                "x": 4,
+                "y": 7
+            },
+            {
+                "x": 6,
+                "y": 4
+            },
+            {
+                "x": 9,
+                "y": 3
+            },
+            {
+                "x": 9,
+                "y": 6
+            }
+        ]
+    },
+    "player_spawn": [
+        {
+            "unit": "liubei",
+            "x": 1,
+            "y": 5
+        },
+        {
+            "unit": "guanyu",
+            "x": 2,
+            "y": 4
+        },
+        {
+            "unit": "zhangfei",
+            "x": 2,
+            "y": 6
+        },
+        {
+            "unit": "zhaoyun",
+            "x": 3,
+            "y": 5
+        },
+        {
+            "unit": "gongsunzan",
+            "x": 0,
+            "y": 4
+        },
+        {
+            "unit": "wuanguo",
+            "x": 0,
+            "y": 6
+        }
+    ],
+    "enemy_spawn": [
+        {
+            "unit": "lubu",
+            "x": 10,
+            "y": 4
+        },
+        {
+            "unit": "li_bu_fu_1",
+            "x": 9,
+            "y": 3
+        },
+        {
+            "unit": "li_bu_fu_2",
+            "x": 9,
+            "y": 5
+        }
+    ],
+    "morale": {
+        "player": 100,
+        "enemy": 100
+    },
+    "win_condition": "kill_commander",
+    "lose_condition": "player_all_dead",
+    "events": [
+        {
+            "turn": 1,
+            "type": "dialog",
+            "key": "chapter2_open",
+            "once": true
+        },
+        {
+            "turn": 3,
+            "type": "dialog",
+            "key": "chapter2_wuanguo_fall",
+            "once": true
+        },
+        {
+            "turn": 4,
+            "type": "dialog",
+            "key": "chapter2_zhangfei_roar",
+            "once": true
+        }
+    ],
+    "stages": [
+        {
+            "id": "stand",
+            "title": "顶住虎牢关前",
+            "objective": "坚守 3 回合：吕布方天三击挡不住，先看看他的路数",
+            "win": {
+                "type": "survive_turns",
+                "value": 3
+            },
+            "on_clear": "吕布久攻不下，愈发急躁——他的方天连击已经推到第三击！"
+        },
+        {
+            "id": "repel",
+            "title": "击退吕布",
+            "objective": "张飞怒吼破他铁皮，关羽骑赵云蓄满青龙——把天下第一武将打下阵去",
+            "win": {
+                "type": "defeat_commander"
+            },
+            "on_clear": "吕布被青龙撞飞，赤兔马把他叼走了"
+        }
     ]
-  },
-  "player_spawn": [
-    {"unit": "liubei", "x": 1, "y": 5},
-    {"unit": "guanyu", "x": 2, "y": 4},
-    {"unit": "zhangfei", "x": 2, "y": 6},
-    {"unit": "zhaoyun", "x": 3, "y": 5},
-    {"unit": "gongsunzan", "x": 0, "y": 4},
-    {"unit": "wuanguo", "x": 0, "y": 6}
-  ],
-  "enemy_spawn": [
-    {"unit": "lubu", "x": 10, "y": 4},
-    {"unit": "li_bu_fu_1", "x": 9, "y": 3},
-    {"unit": "li_bu_fu_2", "x": 9, "y": 5}
-  ],
-  "morale": {"player": 100, "enemy": 100},
-  "win_condition": "kill_commander",
-  "lose_condition": "player_all_dead",
-  "events": [
-    {"turn": 1, "type": "dialog", "key": "chapter2_open", "once": true},
-    {"turn": 3, "type": "dialog", "key": "chapter2_wuanguo_fall", "once": true},
-    {"turn": 4, "type": "dialog", "key": "chapter2_zhangfei_roar", "once": true}
-  ]
 }
