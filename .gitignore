@@ -34,3 +34,12 @@ Thumbs.db
 screenshots/
 tmp/
 game/
+
+# 7. 美术资源白名单
+#    *.png 是全局忽略的（防调试截图入库），但正式美术资产必须进仓库，
+#    否则别人 clone 下来游戏里全是占位色块。
+!**/docs/art/*.png
+!**/assets/portraits/*.png
+!**/assets/units/*.png
+!**/assets/tiles/*.png
+!**/assets/icons/*.png
