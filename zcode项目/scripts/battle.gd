@@ -13,6 +13,9 @@ const SkillsCore := preload("res://scripts/entities/skills.gd")
 const BattleUnitScript := preload("res://scripts/entities/unit.gd")
 const LotteryCore := preload("res://scripts/systems/lottery.gd")
 const SaveCore := preload("res://scripts/systems/save.gd")
+const BondsCore := preload("res://scripts/systems/bonds.gd")
+const PortraitLoaderCore := preload("res://scripts/ui/portrait_loader.gd")
+const UnitArtLoaderCore := preload("res://scripts/ui/unit_art.gd")
 
 const TILE := 52.0          # 格子像素（升级为52以充实画面）
 const MAP_OFFSET := Vector2(24.0, 66.0) # 棋盘左上角偏移
@@ -89,11 +92,12 @@ var active_arrows: Array = []          # 战场中正在飞行的回旋飞弹
 var arrow_nodes: Dictionary = {}       # arrow_id -> Node2D（飞弹视觉节点）
 
 # 输入状态机
-enum InputMode { NONE, SELECT, MOVE, ATTACK, SKILL, POST_MOVE }
+enum InputMode { NONE, SELECT, MOVE, ATTACK, SKILL, POST_MOVE, ROAR }
 var input_mode := InputMode.NONE
 var selected_id := ""
 var move_target: Vector2i
 var skill_target: Vector2i
+var roar_words: int = 6              # 燕人咆哮已喊字数（原著：字数越多威力越大）
 var move_origin_cell: Vector2i = Vector2i(-1, -1)
 var move_gained_charge: int = 0
 var pending_dialog: Array = []      # 待播对话队列
@@ -109,6 +113,8 @@ func _ready() -> void:
 	_draw_grid()
 	_spawn_units()
 	_apply_gear_bonuses()
+	_apply_bonds()
+	_setup_portrait_layer()
 	_init_environment()
 	_ready_init_title()
 	_update_chapter_objectives()
@@ -196,6 +202,78 @@ func _apply_gear_bonuses() -> void:
 		info_label.text += "\n（背包装备已生效：防+%d 血+%d 攻x%.2f）" % [add_def, add_hp, atk_pct]
 
 ## 初始化地形：渲染高地格 + 障碍物城门 + 给臧霸设占山状态
+## ---------- 将缘（羁绊）系统 ----------
+var active_bonds: Array = []
+
+func _player_ids() -> Array:
+	var ids: Array = []
+	for u in units:
+		if u.camp == "player":
+			ids.append(u.id)
+	return ids
+
+## 开局结算：把上阵阵容命中的原著组合变成看得见的效果
+func _apply_bonds() -> void:
+	var ids := _player_ids()
+	active_bonds = BondsCore.active_bonds(ids)
+	if active_bonds.is_empty():
+		return
+	var mor_bonus: int = BondsCore.taoyuan_morale_bonus(ids)
+	if mor_bonus > 0:
+		morale["player"] = int(morale.get("player", 100)) + mor_bonus
+	var baima_mult: float = BondsCore.baima_atk_mult(ids)
+	if baima_mult > 1.0:
+		for u in units:
+			if u.id == "gongsunzan":
+				u.base_atk = int(round(float(u.base_atk) * baima_mult))
+	var names: Array[String] = []
+	for b in active_bonds:
+		names.append(str(b["name"]))
+	_spawn_banner("⚔️ 将缘发动：" + " · ".join(names), Color(0.95, 0.85, 0.45))
+
+## 桃园结义：每回合全体回复
+func _bonds_regen() -> void:
+	var heal: int = BondsCore.taoyuan_regen(_player_ids())
+	if heal <= 0:
+		return
+	for u in _camp_units("player"):
+		if u.hp < u.max_hp:
+			u.hp = mini(u.max_hp, u.hp + heal)
+			_spawn_float_text(u.cell, "+%d 桃园结义" % heal, Color(0.5, 1.0, 0.6))
+	_sync_text_all()
+
+## ---------- 立绘层（美术资源可后补，缺失时自动隐藏） ----------
+var portrait_rect: TextureRect
+
+func _setup_portrait_layer() -> void:
+	portrait_rect = TextureRect.new()
+	portrait_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	portrait_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	portrait_rect.position = Vector2(16, 176)
+	portrait_rect.size = Vector2(300, 400)
+	portrait_rect.visible = false
+	portrait_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(portrait_rect)
+
+## 按当前对话行更新立绘（无图则隐藏，不占位、不报错）
+func _update_dialog_portrait(line: Dictionary) -> void:
+	if portrait_rect == null:
+		return
+	var key := PortraitLoaderCore.resolve_key(line)
+	if key.is_empty():
+		portrait_rect.visible = false
+		return
+	var tex := PortraitLoaderCore.load_for(key, PortraitLoaderCore.resolve_emotion(line))
+	if tex == null:
+		portrait_rect.visible = false
+		return
+	portrait_rect.texture = tex
+	portrait_rect.visible = true
+
+func _sync_text_all() -> void:
+	for u in units:
+		_sync_text(u)
+
 func _init_environment() -> void:
 	_draw_hills()
 	_draw_obstacles()
@@ -589,11 +667,11 @@ func _update_chapter_objectives() -> void:
 		"chapter1":
 			dash_primary_obj.text = "🎯 主要军令：斩杀敌方主将【%s】%s" % [c_name, c_hp_str]
 			dash_secondary_obj.text = "⭐ 战术目标：5 回合内速胜（防止狂力叠高）"
-			dash_tips_content.text = "• 关羽【千里·青龙斩】：每移动 1 格蓄力+1，跑得越远刀芒与贯穿越长！满 10 格震裂城门引发敌军防线崩溃(DEF-20%)！\n• 张飞【燕人战吼】：开局即吼无需蓄力（3回合CD）！范围震晕敌军！\n• 赵云【无限耐力】：牛马神技！行动后直接自愈15%生命！普攻每2次追加一枪！关羽骑乘触发双子合击！\n• 华雄战力随回合膨胀(+15%/回合)，切勿打持久消耗战！"
+			dash_tips_content.text = "• 关羽【千里·青龙斩】：每移动 1 格蓄力+1，跑得越远刀芒与贯穿越长！满 10 格震裂城门引发敌军防线崩溃(DEF-20%)！\n• 张飞【燕人咆哮】：点技能后连点喊字，喊得越长威力越大！六字速控，十四字眩晕两回合！\n• 赵云【无限耐力】：牛马神技！行动后直接自愈15%生命！普攻每2次追加一枪！关羽骑乘触发双子合击！\n• 华雄战力随回合膨胀(+15%/回合)，切勿打持久消耗战！"
 		"chapter2":
 			dash_primary_obj.text = "🎯 主要军令：击退天下无双【%s】%s" % [c_name, c_hp_str]
 			dash_secondary_obj.text = "⭐ 战术目标：打断方天连击，破除铁皮无敌"
-			dash_tips_content.text = "• 吕布【方天乱舞】：连击第 3 击伤害翻 3 倍，并触发【两息铁皮无敌】（受到一切伤害为0）！\n• 张飞【燕人战吼】：张飞战吼可震晕吕布并【直接震碎铁皮与打断连击】！\n• 关羽骑乘赵云双子合击（1.5倍输出），抓住破防窗口集火击破！"
+			dash_tips_content.text = "• 吕布【方天乱舞】：连击第 3 击伤害翻 3 倍，并触发【两息铁皮无敌】（受到一切伤害为0）！\n• 张飞【燕人咆哮】点后连点喊字：十四字「谁敢与我决一死战」可眩晕两回合并震碎铁皮，但声浪敌我不分（静音耳塞可免疫）！\n• 关羽骑乘赵云双子合击（1.5倍输出），抓住破防窗口集火击破！"
 		"chapter3":
 			dash_primary_obj.text = "🎯 主要军令：降伏虎痴【%s】%s" % [c_name, c_hp_str]
 			dash_secondary_obj.text = "⭐ 战术目标：全员爆甲狂笑互搏，集火克敌"
@@ -606,6 +684,13 @@ func _update_chapter_objectives() -> void:
 			dash_primary_obj.text = "🎯 主要军令：斩杀敌方主将【%s】%s" % [c_name, c_hp_str]
 			dash_secondary_obj.text = "⭐ 战术目标：全歼敌军或斩首敌将"
 			dash_tips_content.text = "• 活用走位与技能配合，取得战役胜利！"
+
+	# 将缘（羁绊）：上阵阵容命中原著组合时，把效果写在面板上，别让玩家猜
+	if active_bonds.size() > 0:
+		var bond_lines: Array[String] = []
+		for b in active_bonds:
+			bond_lines.append("• 将缘【%s】：%s" % [b["name"], b["desc"]])
+		dash_tips_content.text += "\n" + "\n".join(bond_lines)
 
 func _update_dashboard() -> void:
 	if dash_overview == null or dash_unit_view == null:
@@ -660,17 +745,22 @@ func _update_dashboard() -> void:
 		var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
 		dash_gimmick_title.text = "🐉 千里青龙势 · %s" % dt.name
 		dash_gimmick_title.add_theme_color_override("font_color", dt.color)
-		dash_gimmick_desc.text = "多回合逃窜蓄势: %d/10格 (倍率 %.1fx)\n💡 绕场跑图叠气势！受击气脉震散直接清零！满10格【劈山裂城】一击必杀！" % [u.charge, CombatCore.dragon_charge_multiplier(u.charge)]
+		var next_hint := ""
+		if u.charge >= 8 and u.charge < 10:
+			next_hint = "\n⚡ 再走 %d 格 = 【劈山裂城】质变：贯穿 4→12 格、震屏加强、可破城门！" % (10 - u.charge)
+		elif u.charge < 8:
+			next_hint = "\n💡 满 10 格才是质变档（贯穿 12 格），7-9 格仍是 4 格贯穿。"
+		dash_gimmick_desc.text = "多回合逃窜蓄势: %d/10格 (倍率 %.1fx)\n💡 绕场跑图叠气势！受击气脉震散直接清零！%s" % [u.charge, CombatCore.dragon_charge_multiplier(u.charge), next_hint]
 		dash_gimmick_bar.value = u.charge * 10
 	elif "roar" in u.skill_ids:
-		dash_gimmick_title.text = "🗣️ 燕人战吼 · 震慑敌胆"
+		dash_gimmick_title.text = "🗣️ 燕人咆哮 · 字数越多威力越大"
 		dash_gimmick_title.add_theme_color_override("font_color", Color(1.0, 0.8, 0.3))
 		var cd_rem: int = u.cds.get("roar", 0)
 		if cd_rem > 0:
-			dash_gimmick_desc.text = "战吼回气冷却中（剩余 %d 回合）\n💡 原著天生神嗓！开局即吼，震得周围敌军眩晕瘫痪！" % cd_rem
+			dash_gimmick_desc.text = "战吼回气冷却中（剩余 %d 回合）\n💡 原著天生神嗓！点技能后连点喊字，喊多长你说了算。" % cd_rem
 			dash_gimmick_bar.value = (float(maxi(0, 3 - cd_rem)) / 3.0) * 100
 		else:
-			dash_gimmick_desc.text = "绝技【燕人战吼】已就绪（开局即用）！\n💡 开嗓直接吼！震得敌军失聪目眩、群体瘫痪1回合！"
+			dash_gimmick_desc.text = "绝技【燕人咆哮】已就绪（开局即用）！\n💡 六字「燕人张飞在此」= 速控 1 回合\n💡 十四字「谁敢与我决一死战」= 眩晕 2 回合 + 震碎吕布铁皮，但声浪敌我不分（戴耳塞免疫）"
 			dash_gimmick_bar.value = 100
 	elif u.id == "huaxiong":
 		dash_gimmick_title.text = "🩸 逃兵狂热 (拖延暴怒)"
@@ -799,6 +889,22 @@ func _make_unit_node(u) -> Node2D:
 	char_lbl.add_theme_font_size_override("font_size", 17)
 	char_lbl.add_theme_color_override("font_color", Color(1, 0.98, 0.92))
 	node.add_child(char_lbl)
+
+	# 4.5 单位贴图（美术资源可后补）：有图则替换色块底盘与书法字，保留阵营边框与血条
+	var art := UnitArtLoaderCore.load_for(u.id)
+	if art != null:
+		var spr := Sprite2D.new()
+		spr.name = "Art"
+		spr.texture = art
+		spr.centered = true
+		# 让贴图脚底落在格子中心，高度约 1.35 格
+		var target_h := TILE * 1.35
+		var s := target_h / float(maxi(1, art.get_height()))
+		spr.scale = Vector2(s, s)
+		spr.position = Vector2(0, -target_h * 0.5 + 6.0)
+		node.add_child(spr)
+		plate.visible = false
+		char_lbl.visible = false
 
 	# 5. 头顶悬浮动态血条 (背景 + 填充)
 	var bar_bg := ColorRect.new()
@@ -991,7 +1097,25 @@ func _input(event: InputEvent) -> void:
 			return
 		return
 
-	# 2. 正常战棋交互阶段：
+	# 2. 燕人咆哮喊字阶段：连点左键/空格累加字数，字数越多威力越大（原著机制）
+	if input_mode == InputMode.ROAR:
+		if event is InputEventMouseButton and event.pressed:
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				_add_roar_word()
+				get_viewport().set_input_as_handled()
+			elif event.button_index == MOUSE_BUTTON_RIGHT:
+				# 右键：不喊了，按当前字数直接出手
+				_execute_roar(roar_words)
+				get_viewport().set_input_as_handled()
+			return
+		if event is InputEventKey and event.pressed and not event.echo:
+			if event.keycode == KEY_SPACE or event.keycode == KEY_ENTER:
+				_add_roar_word()
+				get_viewport().set_input_as_handled()
+				return
+		return
+
+	# 3. 正常战棋交互阶段：
 	if event is InputEventMouseButton and event.pressed:
 		# 右键：快速取消选择/返回自由视角
 		if event.button_index == MOUSE_BUTTON_RIGHT:
@@ -1181,7 +1305,15 @@ func _show_command_menu() -> void:
 		var btn_skill := Button.new()
 		btn_skill.custom_minimum_size = Vector2(136, 34)
 		if skill_id == "dragon_slash":
-			btn_skill.text = "✨ 龙斩(%d/10)" % u.charge
+			# 差一格的玩家最容易被骗：明确预告满 10 格才是质变档（贯穿 12 格）
+			if u.charge >= 10:
+				btn_skill.text = "✨ 龙斩(10/10) 劈山裂城!"
+			elif u.charge >= 8:
+				btn_skill.text = "✨ 龙斩(%d/10) ⚡再%d格质变" % [u.charge, 10 - u.charge]
+			else:
+				btn_skill.text = "✨ 龙斩(%d/10)" % u.charge
+		elif skill_id == "roar":
+			btn_skill.text = "✨ 咆哮·连点喊字%s" % ("" if ready else "(CD)")
 		else:
 			btn_skill.text = "✨ %s%s" % [skill_name, "" if ready else "(CD)"]
 		btn_skill.disabled = not ready or not _has_skill_target(u, skill_id)
@@ -1519,6 +1651,10 @@ func _do_move(cell: Vector2i) -> void:
 		info_label.text = "关羽多回合逃窜蓄力 → %d/10【%s】！跑得越远，青龙越巨！" % [u.charge, dt.name]
 		if u.charge >= 10:
 			_spawn_float_text(cell, "🐉 劈山裂城！百丈真龙显圣！", Color(0.2, 1.0, 0.4), true)
+		elif u.charge >= 8:
+			# 高光预告：把「满 10 格才质变」提前告诉玩家，避免 9 格打出小水花的被欺骗感
+			_spawn_float_text(cell, "⚡ 青龙欲裂！再走 %d 格解锁【劈山裂城】！" % (10 - u.charge), Color(1.0, 0.9, 0.3), true)
+			_spawn_banner("⚡ 再走 %d 格 = 【劈山裂城】质变 · 贯穿 12 格（当前仅 4 格）" % (10 - u.charge), Color(1.0, 0.88, 0.35))
 		elif u.charge >= 7:
 			_spawn_float_text(cell, "🐉 龙吟震天！百丈青龙成型！", Color(0.3, 0.9, 0.6), true)
 		elif u.charge >= 4:
@@ -1673,23 +1809,9 @@ func _do_skill(cell: Vector2i) -> void:
 			_after_action(u)
 			return
 		"roar":
-			var roar_r := 2
-			var save := SaveCore.load_state()
-			var inv: Dictionary = save.get("inventory", {})
-			if int(inv.get("megaphone", 0)) > 0:
-				roar_r = 4
-				_spawn_banner("📣 高音大喇叭加持·超大声波燕人咆哮！", Color(1.0, 0.8, 0.2))
-			else:
-				_spawn_banner("燕人咆哮！", Color(0.9, 0.7, 0.2))
-			_spawn_float_text(u.cell, "这一嗓子，你忍一下！", Color(1.0, 0.85, 0.2), true)
-			_spawn_shockwave(u.cell, Color(0.9, 0.7, 0.2, 0.5))
-			_spawn_burst(u.cell, Color(0.9, 0.7, 0.2, 0.4), 2)
-			_shake_camera(5.0 if roar_r > 2 else 4.0)
-			var targets: Array = []
-			for tt in units:
-				if tt.alive and tt.camp != u.camp and GridCore.chebyshev(u.cell, tt.cell) <= roar_r:
-					targets.append(tt)
-			events = SkillsCore.do_roar(u, targets)
+			# 原著：咆哮的字数越多，威力越大 —— 进入连点喊字状态，玩家决定喊多长
+			_start_roar_charging(u)
+			return
 		"seven_dash":
 			var weaves: int = mini(7, maxi(1, GridCore.manhattan(u.cell, t.cell) + 1))
 			_spawn_float_text(u.cell, "七进七出！子龙又穿过去啦！", Color(0.4, 0.9, 1.0))
@@ -1710,6 +1832,82 @@ func _do_skill(cell: Vector2i) -> void:
 			_spawn_shockwave(u.cell, Color(1, 0.4, 0.2, 0.6))
 			events = SkillsCore.do_naked_armor(u, units)
 			_spawn_burst(u.cell, Color(1, 0.4, 0.2, 0.5), 2)
+	u.acted = true
+	move_origin_cell = Vector2i(-1, -1)
+	move_gained_charge = 0
+	_apply_events(events)
+	_after_action(u)
+
+## ---------- 燕人咆哮：喊字（原著：咆哮的字数越多，威力越大） ----------
+const ROAR_WORDS_MIN := 6
+const ROAR_WORDS_MAX := 14
+const ROAR_FULL_TEXT := "燕人张飞在此，谁敢与我决一死战！"
+const ROAR_WINDOW_SEC := 4.0
+
+func _start_roar_charging(u) -> void:
+	roar_words = ROAR_WORDS_MIN          # 原著里张飞上来就是六字咆哮
+	input_mode = InputMode.ROAR
+	command_menu.visible = false
+	_clear_overlay()
+	_spawn_banner("🗣️ 燕人咆哮 · 连点喊字！", Color(1.0, 0.8, 0.3))
+	_update_roar_prompt(u)
+	var timer := get_tree().create_timer(ROAR_WINDOW_SEC)
+	timer.timeout.connect(_on_roar_window_timeout)
+
+func _on_roar_window_timeout() -> void:
+	if is_inside_tree() and input_mode == InputMode.ROAR:
+		_execute_roar(roar_words)
+
+func _add_roar_word() -> void:
+	if input_mode != InputMode.ROAR:
+		return
+	roar_words = mini(ROAR_WORDS_MAX, roar_words + 1)
+	var u: BattleUnitScript = _unit_by_id(selected_id)
+	if u:
+		_update_roar_prompt(u)
+	if roar_words >= ROAR_WORDS_MAX:
+		_execute_roar(roar_words)
+
+func _update_roar_prompt(u) -> void:
+	var spoken: String = ROAR_FULL_TEXT.substr(0, roar_words)
+	info_label.text = "🗣️ %s（%d/%d 字）—— 连点/空格继续喊，字数越多威力越大！右键直接出手" % [spoken, roar_words, ROAR_WORDS_MAX]
+	_spawn_float_text(u.cell, spoken, Color(1.0, 0.85, 0.2), roar_words >= ROAR_WORDS_MAX)
+
+func _execute_roar(words: int) -> void:
+	var u: BattleUnitScript = _unit_by_id(selected_id)
+	input_mode = InputMode.NONE
+	if u == null or not u.alive:
+		return
+	var full: bool = words >= ROAR_WORDS_MAX
+	var roar_r: int = 3 if full else 2
+	var save: Dictionary = SaveCore.load_state()
+	var inv: Dictionary = save.get("inventory", {})
+	if int(inv.get("megaphone", 0)) > 0:
+		roar_r += 1
+		_spawn_banner("📣 高音大喇叭加持 · 超大声波燕人咆哮！", Color(1.0, 0.8, 0.2))
+	else:
+		_spawn_banner("🗣️ 燕人咆哮！%d 字！" % words, Color(1.0, 0.7, 0.2))
+	_spawn_float_text(u.cell, "这一嗓子，你忍一下！", Color(1.0, 0.85, 0.2), true)
+	_spawn_shockwave(u.cell, Color(0.9, 0.7, 0.2, 0.5))
+	_spawn_burst(u.cell, Color(0.9, 0.7, 0.2, 0.4), 2)
+	_shake_camera(6.0 if full else 4.0)
+	var targets: Array = []
+	for tt in units:
+		if tt.alive and tt.camp != u.camp and GridCore.chebyshev(u.cell, tt.cell) <= roar_r:
+			targets.append(tt)
+	# 十四字满控：声浪太大，敌我不分（原著「群控，敌我不分」）；戴耳塞者免疫
+	var allies: Array = []
+	if full:
+		var has_earplug: bool = int(inv.get("earplug", 0)) > 0
+		if has_earplug:
+			_spawn_float_text(u.cell, "🎧 耳塞生效：自己人安然无恙", Color(0.5, 1.0, 0.8))
+		else:
+			for tt in units:
+				if tt.alive and tt.camp == u.camp and tt.id != u.id and GridCore.chebyshev(u.cell, tt.cell) <= roar_r:
+					allies.append(tt)
+			if allies.size() > 0:
+				_spawn_float_text(u.cell, "⚠️ 声浪太猛，自己人也遭殃！", Color(1.0, 0.5, 0.4), true)
+	var events: Array = SkillsCore.do_roar(u, targets, words, allies)
 	u.acted = true
 	move_origin_cell = Vector2i(-1, -1)
 	move_gained_charge = 0
@@ -2390,6 +2588,7 @@ func _begin_player_turn() -> void:
 				_sync_node(u)
 	_check_turn_events()
 	_check_pressure_flag()
+	_bonds_regen()
 	input_mode = InputMode.NONE
 	selected_id = ""
 	_clear_overlay()
@@ -2449,6 +2648,7 @@ func _show_next_dialog_line() -> void:
 	var speaker: String = line.get("speaker", "")
 	var text: String = line.get("text", "")
 	dialog_text.text = "[b]%s[/b]\n%s" % [speaker, text]
+	_update_dialog_portrait(line)
 	dialog_btn.text = "继续 (Space/点击) ▸"
 
 func _on_dialog_btn_pressed() -> void:

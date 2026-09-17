@@ -8,13 +8,14 @@ const SEED_POOL := [
 	{"id": "corn", "name": "玉米种子", "desc": "关卡内每回合全体回HP 5", "buff": "hp_regen", "value": 5},
 	{"id": "potato", "name": "土豆种子", "desc": "下一关开局士气+10", "buff": "morale_start", "value": 10},
 	{"id": "sweet_potato", "name": "番薯种子", "desc": "关卡内我方攻击+10%", "buff": "atk_pct", "value": 0.10},
+	{"id": "earplug", "name": "静音耳塞", "desc": "原著刘备同款：免疫张飞十四字咆哮的敌我不分，自己人不会被震晕！", "buff": "roar_immune", "value": 1},
 ]
 
 ## 现代降维与沙雕神物奖池：消耗5000声望，抽取原著穿越系统专属神物
 const WEAPON_POOL := [
 	{"id": "electric_baton", "name": "现代防暴电棍", "desc": "伤害仅10点，但强力高压电击敌将抽搐口吐白沫、强制眩晕1回合！", "buff": "stun_baton", "value": 10},
 	{"id": "dongfeng", "name": "东风·微缩版", "desc": "降维大杀器：战术呼叫全图爆炸轰击，范围爆破！", "buff": "full_screen", "value": 1},
-	{"id": "megaphone", "name": "高音大喇叭", "desc": "张飞专属扩音神物：燕人咆哮范围扩大2倍，震穿敌军耳膜！", "buff": "roar_boost", "value": 2},
+	{"id": "megaphone", "name": "高音大喇叭", "desc": "张飞专属扩音神物：燕人咆哮范围翻倍，震穿敌军耳膜！", "buff": "roar_boost", "value": 2},
 	{"id": "military_coat", "name": "防寒军大衣", "desc": "皇叔御寒战袍：全军抗击打提升，防御+15，坚韧耐揍！", "buff": "def_gear", "value": 15},
 ]
 

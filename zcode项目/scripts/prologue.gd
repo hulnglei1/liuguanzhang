@@ -6,6 +6,7 @@ extends Control
 
 const BattleScript := preload("res://scripts/battle.gd")
 const SaveCore := preload("res://scripts/systems/save.gd")
+const PortraitLoaderCore := preload("res://scripts/ui/portrait_loader.gd")
 
 const COL_BG := Color(0.035, 0.045, 0.06, 1.0)
 const COL_GOLD := Color(0.85, 0.72, 0.42)
@@ -43,6 +44,7 @@ var prompt_label: Label
 
 var typing := false
 var type_tween: Tween
+var portrait_rect: TextureRect
 
 
 func _ready() -> void:
@@ -167,6 +169,16 @@ func _build_body_layer() -> Control:
 	layer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
+	# 立绘位（美术资源后补；缺图自动隐藏，不影响文字演出）
+	portrait_rect = TextureRect.new()
+	portrait_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	portrait_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	portrait_rect.position = Vector2(840, 150)
+	portrait_rect.size = Vector2(360, 480)
+	portrait_rect.visible = false
+	portrait_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(portrait_rect)
+
 	# 人物名牌（对白用）
 	speaker_plate = PanelContainer.new()
 	speaker_plate.position = Vector2(180, 276)
@@ -188,7 +200,7 @@ func _build_body_layer() -> Control:
 	# 正文
 	text_label = RichTextLabel.new()
 	text_label.position = Vector2(180, 330)
-	text_label.size = Vector2(920, 240)
+	text_label.size = Vector2(640, 240)
 	text_label.bbcode_enabled = true
 	text_label.scroll_active = false
 	text_label.fit_content = false
@@ -222,6 +234,7 @@ func _next() -> void:
 
 	var speaker := str(line.get("speaker", ""))
 	var body := str(line.get("text", ""))
+	_update_portrait(line)
 
 	match kind:
 		"dialog":
@@ -237,21 +250,36 @@ func _next() -> void:
 			sb.content_margin_bottom = 4
 			speaker_plate.add_theme_stylebox_override("panel", sb)
 			text_label.position = Vector2(180, 330)
-			text_label.size = Vector2(920, 240)
+			text_label.size = Vector2(640, 240)
 			text_label.add_theme_color_override("default_color", COL_TEXT)
 			_type_in(body)
 		"system":
 			speaker_plate.visible = false
-			text_label.position = Vector2(230, 300)
-			text_label.size = Vector2(820, 280)
+			text_label.position = Vector2(180, 300)
+			text_label.size = Vector2(640, 280)
 			text_label.add_theme_color_override("default_color", COL_SYS)
 			_type_in("[center]\n" + body + "\n[/center]")
 		_:
 			speaker_plate.visible = false
-			text_label.position = Vector2(180, 318)
-			text_label.size = Vector2(920, 260)
+			text_label.position = Vector2(140, 318)
+			text_label.size = Vector2(700, 260)
 			text_label.add_theme_color_override("default_color", COL_SCROLL)
 			_type_in("[center][i]" + body + "[/i][/center]")
+
+
+func _update_portrait(line: Dictionary) -> void:
+	if portrait_rect == null:
+		return
+	var key := PortraitLoaderCore.resolve_key(line)
+	if key.is_empty():
+		portrait_rect.visible = false
+		return
+	var tex := PortraitLoaderCore.load_for(key, PortraitLoaderCore.resolve_emotion(line))
+	if tex == null:
+		portrait_rect.visible = false
+	else:
+		portrait_rect.texture = tex
+		portrait_rect.visible = true
 
 
 func _type_in(body: String) -> void:

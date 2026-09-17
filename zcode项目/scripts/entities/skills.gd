@@ -112,23 +112,32 @@ static func do_dragon_slash(caster, target, pierced_targets: Array = []) -> Arra
 
 ## 结算【燕人战吼】（张飞）
 ## 原著小说设定：无需蓄力，开局即可吼，纯CD机制！震得敌军失聪目眩（100%眩晕1回合，且震散吕布方天连击与破除铁皮无敌）
-static func do_roar(caster, targets: Array) -> Array:
-	var mult: float = 1.6
+static func do_roar(caster, targets: Array, words: int = 6, allies_in_range: Array = []) -> Array:
+	# 原著：咆哮的字数越多，威力越大
+	#   六字「燕人张飞在此」      -> 1.6x，眩晕 1 回合
+	#   十四字「…谁敢与我决一死战」-> 2.4x，眩晕 2 回合，且敌我不分（自己人也晕）
+	var w: int = clampi(words, 6, 14)
+	var mult: float = 1.0 + 0.1 * float(w)
+	var stun_turns: int = 2 if w >= 14 else 1
 	var ev: Array = []
 	for t in targets:
 		var had_iron_skin: bool = t.iron_skin
 		var dmg: int = CombatCore.damage(caster.effective_atk(), mult, t.effective_def())
 		t.take_damage(dmg)
 		ev.append(CombatCore.make_damage_event(t.id, dmg, false))
-		t.stun_turns = max(t.stun_turns, 1)
-		ev.append({"type": "stun", "target": t.id, "turns": 1})
+		t.stun_turns = max(t.stun_turns, stun_turns)
+		ev.append({"type": "stun", "target": t.id, "turns": stun_turns})
 		if t.id == "lubu" or "lubu_fangtian" in t.skill_ids:
 			t.fangtian_reset()
 			if had_iron_skin:
 				ev.append({"type": "iron_skin_break", "target": t.id})
 		if not t.alive:
 			ev.append({"type": "death", "target": t.id})
-	ev.append({"type": "skill", "skill_id": "roar", "caster": caster.id, "fx": "roar", "full": true})
+	# 十四字满控声浪太大，己方也遭殃（原著「群控，敌我不分」）——只晕不伤，戴耳塞者免疫
+	for a in allies_in_range:
+		a.stun_turns = max(a.stun_turns, 1)
+		ev.append({"type": "stun", "target": a.id, "turns": 1, "friendly_fire": true})
+	ev.append({"type": "skill", "skill_id": "roar", "caster": caster.id, "fx": "roar", "full": true, "words": w})
 	caster.charge = 0
 	caster.start_cd("roar", meta("roar").cd)
 	return ev
