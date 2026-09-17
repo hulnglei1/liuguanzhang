@@ -28,6 +28,7 @@ func _initialize() -> void:
 		chs.append("chapter1")
 	save["chapters"] = chs
 	save["prestige"] = 8888
+	save["prologues_seen"] = []   # 让序章过场每次录制都会播放
 	SaveCore.save_state(save)
 
 	_run()
@@ -78,6 +79,25 @@ func _btn(node_name: String) -> Node:
 	return root.find_child(node_name, true, false)
 
 
+func _find_btn(node: Node, text_sub: String) -> Button:
+	if node is Button and text_sub in (node as Button).text:
+		return node
+	for c in node.get_children():
+		var found := _find_btn(c, text_sub)
+		if found != null:
+			return found
+	return null
+
+
+func _in_prologue() -> bool:
+	if current_scene == null:
+		return false
+	var scr = current_scene.get_script()
+	if scr == null:
+		return false
+	return str(scr.resource_path).ends_with("prologue.gd")
+
+
 func _run() -> void:
 	if target == "all" or target == "ch1":
 		await _play("chapter1")
@@ -107,6 +127,16 @@ func _play(chapter_id: String) -> void:
 
 	BattleScript.chapter_id = chapter_id
 	await _click_node(_btn("btn_" + chapter_id), 1.4)
+
+	# 序章过场（曹操传式开场）：展示标题卡与两行正文，再跳过进战场
+	if _in_prologue():
+		await _wait(3.0)
+		await _press_space()
+		await _wait(1.6)
+		await _press_space()
+		await _wait(1.0)
+		await _click_node(_find_btn(root, "跳过序章"), 1.6)
+
 	if not (current_scene is BattleScript):
 		change_scene_to_file("res://scenes/battle.tscn")
 		await _wait(1.4)

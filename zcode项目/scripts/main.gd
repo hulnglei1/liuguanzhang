@@ -268,7 +268,14 @@ func _build_menu() -> void:
 func _on_chapter(id: String) -> void:
 	print("[主菜单] 进军章节：", id)
 	BattleScript.chapter_id = id
-	get_tree().change_scene_to_file("res://scenes/battle.tscn")
+	# 首次进入该章：先播序章过场交代背景（曹操传式开场）；已看过则直接进关
+	var st: Dictionary = SaveCore.load_state()
+	var seen: Array = st.get("prologues_seen", [])
+	var has_prologue := FileAccess.file_exists("res://data/prologues/%s.json" % id)
+	if has_prologue and not seen.has(id):
+		get_tree().change_scene_to_file("res://scenes/prologue.tscn")
+	else:
+		get_tree().change_scene_to_file("res://scenes/battle.tscn")
 
 func _format_status_text() -> String:
 	var p: int = int(save.get("prestige", 0))

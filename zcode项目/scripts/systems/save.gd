@@ -11,6 +11,7 @@ static func new_state() -> Dictionary:
 		"inventory": {},      # item_id -> 数量
 		"collection": {},     # 图鉴：key -> true（武将/技能/名场面）
 		"chapters": [],       # 已通关章节
+		"prologues_seen": [], # 已观看过序章过场的章节
 	}
 
 static func load_state() -> Dictionary:
@@ -24,6 +25,10 @@ static func load_state() -> Dictionary:
 	var st := new_state()
 	for k in st.keys():
 		if parsed.has(k):
+			st[k] = parsed[k]
+	# 保留存档里默认表之外的扩展字段（避免旧版本新增字段被静默丢弃）
+	for k in parsed.keys():
+		if not st.has(k):
 			st[k] = parsed[k]
 	return st
 
