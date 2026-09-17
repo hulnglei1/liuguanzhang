@@ -680,8 +680,8 @@ func _update_dashboard() -> void:
 	elif "lubu_fangtian" in u.skill_ids:
 		dash_gimmick_title.text = "🔥 鬼神方天 (方天连击)"
 		dash_gimmick_title.add_theme_color_override("font_color", Color(0.9, 0.4, 1.0))
-		dash_gimmick_desc.text = "连击段数 %d/3 (下一击倍率 %.1fx)\n⚠ 连击跨回合保留，第3击翻3倍！用张飞怒吼打断！" % [u.fangtian_combo, 3.0 if u.fangtian_combo >= 2 else 1.0]
-		dash_gimmick_bar.value = (float(u.fangtian_combo) / 3.0) * 100
+		dash_gimmick_desc.text = "连击段数 %d/3 (下一击倍率 %.1fx)\n⚠ 连击跨回合保留，第3击翻3倍！用张飞怒吼打断！" % [u.combo_strikes, 3.0 if u.combo_strikes >= 2 else 1.0]
+		dash_gimmick_bar.value = (float(u.combo_strikes) / 3.0) * 100
 	elif "naked_armor" in u.skill_ids:
 		dash_gimmick_title.text = "🛡️ 裸衣死战"
 		dash_gimmick_title.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))

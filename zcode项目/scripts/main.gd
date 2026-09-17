@@ -249,6 +249,7 @@ func _build_menu() -> void:
 		btn_action.position = Vector2(18, 148)
 		btn_action.size = Vector2(544, 46)
 		btn_action.add_theme_font_size_override("font_size", 16)
+		btn_action.name = "btn_" + def.id  # 供自动化演示/测试精确定位
 		btn_action.pressed.connect(_on_chapter.bind(def.id))
 		card.add_child(btn_action)
 
