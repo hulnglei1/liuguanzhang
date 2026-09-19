@@ -103,6 +103,7 @@ var selected_id := ""
 var move_target: Vector2i
 var skill_target: Vector2i
 var roar_words: int = 6              # 燕人咆哮已喊字数（原著：字数越多威力越大）
+var roar_idle_timer: SceneTreeTimer = null  # "停手自动出手"计时器（每次加字都重置）
 var move_origin_cell: Vector2i = Vector2i(-1, -1)
 var move_gained_charge: int = 0
 var pending_dialog: Array = []      # 待播对话队列
@@ -2061,6 +2062,8 @@ const ROAR_WORDS_MIN := 6
 const ROAR_WORDS_MAX := 14
 const ROAR_FULL_TEXT := "燕人张飞在此，谁敢与我决一死战！"
 const ROAR_WINDOW_SEC := 4.0
+## 停手这么久就自动出手：玩家连点几下后不必干等满 4 秒时间窗（否则像卡住了）
+const ROAR_IDLE_RELEASE_SEC := 0.9
 
 func _start_roar_charging(u) -> void:
 	roar_words = ROAR_WORDS_MIN          # 原著里张飞上来就是六字咆哮
@@ -2071,6 +2074,18 @@ func _start_roar_charging(u) -> void:
 	_update_roar_prompt(u)
 	var timer := get_tree().create_timer(ROAR_WINDOW_SEC)
 	timer.timeout.connect(_on_roar_window_timeout)
+	_restart_roar_idle_timer()
+
+## 重置"停手自动出手"计时器：玩家每次加字都会重置它。
+## 一旦停手超过 ROAR_IDLE_RELEASE_SEC 就立刻出手 ——
+## 不用干等满 4 秒时间窗（玩家反馈"连点完了还得等，像卡住了"）。
+func _restart_roar_idle_timer() -> void:
+	roar_idle_timer = get_tree().create_timer(ROAR_IDLE_RELEASE_SEC)
+	var my_timer: SceneTreeTimer = roar_idle_timer
+	my_timer.timeout.connect(func() -> void:
+		if is_inside_tree() and input_mode == InputMode.ROAR and roar_idle_timer == my_timer:
+			_execute_roar(roar_words)
+	)
 
 func _on_roar_window_timeout() -> void:
 	if is_inside_tree() and input_mode == InputMode.ROAR:
@@ -2085,10 +2100,12 @@ func _add_roar_word() -> void:
 		_update_roar_prompt(u)
 	if roar_words >= ROAR_WORDS_MAX:
 		_execute_roar(roar_words)
+		return
+	_restart_roar_idle_timer()      # 还没喊满：重置"停手就出手"计时
 
 func _update_roar_prompt(u) -> void:
 	var spoken: String = ROAR_FULL_TEXT.substr(0, roar_words)
-	info_label.text = "🗣️ %s（%d/%d 字）—— 连点/空格继续喊，字数越多威力越大！右键直接出手" % [spoken, roar_words, ROAR_WORDS_MAX]
+	info_label.text = "🗣️ %s（%d/%d 字）—— 连点/空格继续喊（字数越多威力越大）；停手 %.1f 秒或右键即出手" % [spoken, roar_words, ROAR_WORDS_MAX, ROAR_IDLE_RELEASE_SEC]
 	_spawn_float_text(u.cell, spoken, Color(1.0, 0.85, 0.2), roar_words >= ROAR_WORDS_MAX)
 
 func _execute_roar(words: int) -> void:
