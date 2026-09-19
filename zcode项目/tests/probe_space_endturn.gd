@@ -116,6 +116,38 @@ func _run() -> void:
 	_check(showing, "空格前对白确实在播放")
 	_check(int(b.turn_state.turn) == turn2, "对白播放中按空格不会结束回合（只推进对白）")
 
+	# ---------- D. 我方单位也会"回合流逝"（CD / 眩晕 / 脱力必须递减）----------
+	# 此前 end_turn() 只在敌方回合末尾对敌方调用，我方从不调用，后果极严重：
+	#   技能冷却永不恢复（放一次就永久灰）／被眩晕后永久定身／脱力永不恢复
+	print("\n---- D. 我方单位回合流逝 ----")
+	await _wait(3.5)
+	_clear_ui_state()
+	var gy = b._unit_by_id("guanyu")
+	var zf = b._unit_by_id("zhangfei")
+	gy.cds["dragon_slash"] = 2
+	zf.stun_turns = 1
+	zf.exhausted_turns = 2
+	zf.exhausted = true
+	b._end_player_turn()
+	await _wait(5.0)
+	print("  冷却 2 → %d；眩晕 1 → %d；脱力 2 → %d" % [
+		int(gy.cds.get("dragon_slash", 0)), zf.stun_turns, zf.exhausted_turns])
+	_check(int(gy.cds.get("dragon_slash", 0)) < 2, "技能冷却随回合递减（此前永不恢复 → 技能永久灰）")
+	_check(zf.stun_turns == 0, "眩晕随回合解除（此前我方被晕 = 永久定身）")
+	_check(zf.exhausted_turns == 1, "脱力剩余回合递减（此前永不恢复）")
+
+	# ---------- E. 被眩晕的我方单位自动跳过 ----------
+	print("\n---- E. 被眩晕的我方单位自动跳过 ----")
+	await _wait(1.5)
+	var lb = b._unit_by_id("liubei")
+	lb.stun_turns = 1
+	b._begin_player_turn()
+	await _wait(0.8)
+	print("  被眩晕的刘备 acted=%s（应为 true = 自动跳过）" % str(lb.acted))
+	_check(bool(lb.acted), "被眩晕的我方单位自动跳过本回合（玩家不用手动处理）")
+	lb.stun_turns = 0
+	lb.acted = false
+
 	print("\n===== 汇总 =====")
 	if failed == 0:
 		print("空格键验收：全部通过 ✅")

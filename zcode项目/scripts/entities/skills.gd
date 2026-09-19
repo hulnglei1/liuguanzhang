@@ -118,7 +118,11 @@ static func do_roar(caster, targets: Array, words: int = 6, allies_in_range: Arr
 	#   六字「燕人张飞在此」      -> 1.6x，眩晕 1 回合
 	#   十四字「…谁敢与我决一死战」-> 2.4x，眩晕 2 回合，且敌我不分（自己人也晕）
 	var w: int = clampi(words, 6, 14)
-	var mult: float = 1.0 + 0.1 * float(w)
+	# 咆哮是**控制技**，不是输出技（玩家反馈"攻击力应该不高，只是控制比较厉害"）：
+	#   六字   0.64x → 主要价值：眩晕 1 回合
+	#   十四字 0.96x → 主要价值：眩晕 2 回合 + 震碎吕布铁皮 + 清空方天连击
+	# 杀伤刻意压得比普攻低，靠控制与破防吃饭。
+	var mult: float = 0.4 + 0.04 * float(w)
 	var stun_turns: int = 2 if w >= 14 else 1
 	var ev: Array = []
 	for t in targets:

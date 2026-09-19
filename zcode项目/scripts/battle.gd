@@ -1637,12 +1637,17 @@ func _has_attackable_target(u) -> bool:
 
 func _has_skill_target(u, skill_id: String) -> bool:
 	if skill_id == "dragon_slash":
-		# ① 相邻 4 向有敌人（青龙斩贴脸出刀，沿直线贯穿其身后）
+		# ① 沿上下左右直线、距离不超过当前蓄力贯穿格数的敌人（蓄得越久打得越远）
+		var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
+		var reach: int = maxi(1, int(dt.get("line_len", 1)))
 		for d in GridCore.DIRS4:
-			var c: Vector2i = u.cell + d
-			var enemy := _unit_at(c)
-			if enemy and enemy.alive and enemy.camp != u.camp:
-				return true
+			for k in range(1, reach + 1):
+				var c: Vector2i = u.cell + d * k
+				if c.x < 0 or c.y < 0 or c.x >= MAP_W or c.y >= MAP_H:
+					break
+				var enemy := _unit_at(c)
+				if enemy and enemy.alive and enemy.camp != u.camp:
+					return true
 		# ② 直线上有未破的城门（第 1 关「劈关夺门」）
 		#    少了这一条，华雄一死、周围没敌人时，关羽的技能按钮会一直灰着 ——
 		#    玩家明明蓄满了 10 格却点不动，整个阶段 2 无法完成。
@@ -1708,14 +1713,24 @@ func _cmd_skill() -> void:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
 	if u and "dragon_slash" in u.skill_ids:
 		var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
-		var line_len: int = int(dt.get("line_len", 1))
-		info_label.text = "【青龙偃月斩】请点击上下左右相邻敌军！刀芒将贯穿该敌军及后方 %d 格直线！" % line_len
+		var reach: int = maxi(1, int(dt.get("line_len", 1)))
+		info_label.text = "【千里青龙斩】点直线上任意敌军：刀芒贯穿目标及身后共 %d 格！蓄力越多打得越远（也可对准同一直线上的城门劈门）" % reach
 		var valid_cells: Array[Vector2i] = []
 		for d in GridCore.DIRS4:
-			var c: Vector2i = u.cell + d
-			var enemy := _unit_at(c)
-			if enemy and enemy.alive and enemy.camp != u.camp:
-				valid_cells.append(c)
+			for k in range(1, reach + 1):
+				var c: Vector2i = u.cell + d * k
+				if c.x < 0 or c.y < 0 or c.x >= MAP_W or c.y >= MAP_H:
+					break
+				var enemy := _unit_at(c)
+				if enemy and enemy.alive and enemy.camp != u.camp:
+					valid_cells.append(c)
+		# 城门格也一起高亮：阶段 2 玩家一眼就知道能劈哪里
+		if not gate_broken and chapter.has("map"):
+			for o in chapter["map"].get("obstacles", []):
+				if bool(o.get("is_gate", false)):
+					var g := Vector2i(int(o.get("x", -1)), int(o.get("y", -1)))
+					if _can_slash_gate(u, g):
+						valid_cells.append(g)
 		_draw_cells(valid_cells, Color(0.95, 0.35, 0.15, 0.55))
 	elif u and "arrow_rain" in u.skill_ids:
 		info_label.text = "【白马·回旋飞弹】全图超远视距锁定！请点击全图任意敌军，发射定速追踪飞弹！"
@@ -1929,6 +1944,8 @@ func _has_slashable_gate(u) -> bool:
 
 func _is_in_skill_range(cell: Vector2i) -> bool:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
+	if u == null:
+		return false      # 防御：selected_id 为空时直接访问 u.skill_ids 会抛脚本错误
 	var t: BattleUnitScript = _unit_at(cell)
 	var skill_id: String = u.skill_ids[0] if u.skill_ids.size() > 0 else ""
 	# 自身技（裸衣）不需要目标格；范围技（箭雨）仍需点目标附近
@@ -1941,8 +1958,17 @@ func _is_in_skill_range(cell: Vector2i) -> bool:
 		return false
 	match skill_id:
 		"dragon_slash":
+			# 刀芒沿上下左右直线贯穿：**蓄力越多打得越远**（与"劈城门"共用同一套判定）
+			# 之前只允许紧贴相邻 1 格 —— 玩家辛苦蓄满 10 格却够不着远处的敌人，
+			# 自然觉得"技能根本用不了"（玩家实测反馈）。
 			var diff := cell - u.cell
-			return diff in GridCore.DIRS4
+			if diff == Vector2i.ZERO:
+				return false
+			if diff.x != 0 and diff.y != 0:
+				return false                      # 必须在同一行或同一列
+			var dist: int = absi(diff.x) + absi(diff.y)
+			var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
+			return dist <= int(dt.get("line_len", 1))
 		"roar":
 			var roar_r := 2
 			var save := SaveCore.load_state()
@@ -2662,9 +2688,14 @@ func _after_action(u) -> void:
 			info_label.text += "\n赵云体魄强健无限耐力！行动后自愈 %d HP！" % healed
 
 	# 检查胜利与失败
+	# 结算时也要清掉输入状态（input_mode / selected_id），否则会残留"可操作态"：
+	# 之后任何点击都可能走进 _is_in_skill_range 这类函数，
+	# 因 selected_id 已失效而直接抛脚本错误（探针实测抓到过）
 	if _check_victory():
+		_finish_turn_action()
 		return
 	if _check_defeat():
+		_finish_turn_action()
 		return
 	# 完成本行动，重置选中与命令状态
 	_finish_turn_action()
@@ -2687,6 +2718,13 @@ func _after_action(u) -> void:
 
 func _end_player_turn() -> void:
 	pending_end_turn = false
+	# 我方单位的"回合流逝"：技能冷却-1、眩晕-1、脱力-1
+	# ⚠ 以前只有敌方单位调用 end_turn()，我方从不调用，后果是：
+	#   * 技能冷却永不递减 → 放一次技能后按钮【永久变灰】（玩家反馈"关羽特技一直用不了"）
+	#   * 被眩晕后 stun_turns 永不归零 → 永久定身（张飞十四字咆哮"敌我不分"会把队友冻住）
+	#   * 武安国挥锤的脱力永不恢复（DEF-30% 挂一整局）
+	for u in _camp_units("player"):
+		u.end_turn()
 	TurnCore.to_enemy(turn_state)
 	info_label.text = "敌方回合…"
 	_update_hud()
@@ -2854,6 +2892,12 @@ func _begin_player_turn() -> void:
 	for u in _camp_units("player"):
 		u.acted = false
 		u.moved_this_turn = false    # 新回合：重置"已移动"状态
+		# 被眩晕的单位本回合无法行动 —— 直接标记为"已行动"自动跳过，
+		# 免得玩家点上去发现什么都做不了（玩家反馈："眩晕应该自动进入第二回合"）
+		if u.alive and u.is_stunned():
+			u.acted = true
+			u.moved_this_turn = true
+			_spawn_float_text(u.cell, "💫 眩晕中，本回合跳过", Color(0.75, 0.8, 1.0))
 		# 玉米种子回血：每回合开始时自动恢复生命
 		if u.alive and u.hp_regen > 0 and u.hp < u.max_hp:
 			var heal: int = mini(u.hp_regen, u.max_hp - u.hp)
