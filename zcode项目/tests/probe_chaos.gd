@@ -72,13 +72,14 @@ func _check_invariants(op: String) -> void:
 	if n_arr != n_node:
 		_bad("飞弹数据/节点不一致", "active_arrows=%d 但 arrow_nodes=%d（操作=%s）" % [n_arr, n_node, op])
 
-	# 3. 已行动的单位不应还能被选中操作（防"放完技能还能动"）
+	# 3. 已行动的单位不应处于可操作态（防"放完技能还能动"）
+	#    判定方向：selected 指向 acted 单位时，input_mode 必须是 NONE(0)。
+	#    注意这里曾经写成 `input_mode == 0` —— 方向写反，导致真 bug 被漏报。
 	#    关卡已结束时跳过（战败/胜利后不再接受操作，残留选中无害）
 	if b.selected_id != "" and not b.victory and not b.defeat:
 		var sel = b._unit_by_id(b.selected_id)
-		if sel != null and sel.acted and b.input_mode == 0:
-			# input_mode==NONE(0) 时不该处于"选中已行动单位"的待操作态
-			_bad("已行动单位仍处于可操作状态", "%s acted=true 但仍是 selected（操作=%s）" % [sel.id, op])
+		if sel != null and sel.acted and b.input_mode != 0:
+			_bad("已行动单位处于可操作态", "%s acted=true 但 input_mode=%d（操作=%s）" % [sel.id, b.input_mode, op])
 
 	# 4. 回合数单调（不该回退或卡在 0）
 	if int(b.turn_state.turn) < 1:
@@ -93,6 +94,13 @@ func _check_invariants(op: String) -> void:
 	var alive: int = int(b._camp_units("player").size())
 	if alive > minions_before:
 		_bad("我方单位数异常增加", "初始 %d，现在 %d" % [minions_before, alive])
+
+	# 7. 已行动完毕的我方单位不应还挂着可见的命令菜单
+	#    （对应玩家看到的"原地残留 2 个小图标"——曹操传式气泡没清掉）
+	if b.command_menu.visible and b.selected_id != "" and not b.victory and not b.defeat:
+		var su = b._unit_by_id(b.selected_id)
+		if su != null and su.acted:
+			_bad("已行动单位仍挂着命令菜单", "%s acted=true 但命令菜单可见（操作=%s）" % [su.id, op])
 
 
 func _count_temp_nodes() -> int:
@@ -160,6 +168,29 @@ func _random_action() -> String:
 	return "%s 待机(兜底)" % u.id
 
 
+## 模拟"点一下已行动的武将查看信息，再点地面"——走真实点击入口 _handle_click。
+## 这条路径曾经让他又能移动（_inspect_unit 误把 input_mode 设成 SELECT）。
+func _inspect_acted_check() -> String:
+	var acted_players: Array = []
+	for pu in b._camp_units("player"):
+		if pu.acted:
+			acted_players.append(pu)
+	if acted_players.is_empty():
+		return ""
+	var ap = acted_players[rng.randi() % acted_players.size()]
+	var pos0: Vector2i = ap.cell
+	b._handle_click(ap.cell)                       # 点他（查看信息）
+	await _wait(0.1)
+	var mode_after: int = int(b.input_mode)
+	b._handle_click(ap.cell + Vector2i(0, 1))      # 再点旁边地面
+	await _wait(0.15)
+	if mode_after != 0:
+		_bad("查看已行动单位后进入可操作态", "%s input_mode=%d" % [ap.id, mode_after])
+	if ap.cell != pos0:
+		_bad("查看已行动单位后可移动", "%s 位置 %s → %s" % [ap.id, str(pos0), str(ap.cell)])
+	return "查看已行动单位 %s" % ap.id
+
+
 func _try_random_move(u) -> String:
 	var dirs: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
 		Vector2i(1, 1), Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1)]
@@ -208,6 +239,13 @@ func _run() -> void:
 		action_log.append(op)
 		await _wait(0.12)
 		_check_invariants(op)
+		# 每 5 步插一次"点已行动单位查看信息"（真实点击入口）——
+		# 这条路径曾经让玩家"点一下放完技能的武将，再点地面就又能移动"
+		if i % 5 == 3:
+			var op2: String = await _inspect_acted_check()
+			if op2 != "":
+				action_log.append(op2)
+				_check_invariants(op2)
 		# 对白弹出会卡住操作，随手跳过
 		if b.dialog_showing:
 			b._on_dialog_skip_pressed()

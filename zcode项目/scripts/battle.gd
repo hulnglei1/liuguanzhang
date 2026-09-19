@@ -1214,6 +1214,13 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 
 func _handle_click(cell: Vector2i) -> void:
+	# 统一前置：点到"本回合已行动完毕的我方单位"一律只做查看，不进入任何可操作态。
+	# 否则状态机会残留 SELECT / POST_MOVE，出现"点一下他还能继续移动"、
+	# 命令菜单不消失、之后再点地面反应异常等一串怪现象。
+	var clicked: BattleUnitScript = _unit_at(cell)
+	if clicked != null and clicked.camp == "player" and clicked.alive and clicked.acted:
+		_inspect_unit(clicked.id)
+		return
 	match input_mode:
 		InputMode.NONE:
 			var u: BattleUnitScript = _unit_at(cell)
@@ -1271,14 +1278,17 @@ func _inspect_unit(id: String) -> void:
 	_clear_overlay()
 	_clear_command_menu()
 	command_menu.visible = false
-	input_mode = InputMode.SELECT
+	# 仅"查看"用途：绝不能进入 SELECT 可操作态。
+	# （这里曾经设成 SELECT，导致玩家点一下已行动的武将查看信息后，
+	#   再点地面就能让他移动——即玩家反馈的"放完技能还能移动"）
+	input_mode = InputMode.NONE
 	_update_dashboard()
 	var u: BattleUnitScript = _unit_by_id(id)
 	if u:
 		if u.camp == "enemy":
 			info_label.text = "侦查敌情：【%s】HP %d/%d, 攻 %d, 防 %d" % [u.name, u.hp, u.max_hp, u.effective_atk(), u.effective_def()]
 		else:
-			info_label.text = "【%s】本回合已行动完毕。" % u.name
+			info_label.text = "【%s】本回合已行动完毕（仅查看，不可操作）。" % u.name
 
 func _unit_at(cell: Vector2i) -> BattleUnitScript:
 	for u in units:
@@ -1298,6 +1308,17 @@ func _select_unit(id: String) -> void:
 	var u: BattleUnitScript = _unit_by_id(id)
 	if u == null or not u.alive:
 		_cancel_input()
+		return
+	# 纵深防御：本回合已行动的单位不能被选中操作。
+	# 点击入口虽然有 not u.acted 判断，但 _select_unit 是公共入口，任何绕过
+	# （直接调用、撤回移动、以后新增的快捷键等）都必须拦得住，否则会出现
+	# "放完技能还能移动 / 还能再打一次" 这类漏洞。
+	if u.camp == "player" and u.acted:
+		selected_id = ""
+		input_mode = InputMode.NONE
+		_clear_overlay()
+		_clear_command_menu()
+		command_menu.visible = false
 		return
 	_clear_overlay()
 	var blocked := _blocked_cells(id)
@@ -1323,6 +1344,10 @@ func _show_command_menu() -> void:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
 	if u == null or not u.alive or dialog_showing or u.camp != "player" or u.acted:
 		command_menu.visible = false
+		# 已行动完的单位不该停留在可操作态；这里顺手清掉，避免状态残留
+		if u != null and u.acted:
+			input_mode = InputMode.NONE
+			_clear_overlay()
 		return
 	input_mode = InputMode.POST_MOVE if move_origin_cell != Vector2i(-1, -1) else InputMode.SELECT
 	command_menu.visible = true
@@ -1723,6 +1748,13 @@ func _is_in_reachable(cell: Vector2i) -> bool:
 func _do_move(cell: Vector2i) -> void:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
 	if u == null or not u.alive:
+		return
+	# 防御：本回合已经行动完毕的单位不能再移动
+	# （即使状态机被绕过——例如"查看信息"误入可操作态——也拦得住）
+	if u.acted:
+		info_label.text = "%s 本回合已行动完毕，不能再移动（仅可查看）。" % u.name
+		input_mode = InputMode.NONE
+		_clear_overlay()
 		return
 	# 防御：本回合已经移动过的单位不能再移动（单位级状态，换人也不会被绕过）
 	if u.moved_this_turn:
