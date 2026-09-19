@@ -38,6 +38,7 @@ var iron_skin_turns: int = 0     # 铁皮剩余回合数
 var zhaoyun_strike_count: int = 0 # 赵云普攻计数（每2次追加戳刺）
 var gate_broken_debuff: bool = false # 汜水关破门：敌DEF-20%
 var exhausted: bool = false      # 挥舞重锤脱力力竭：DEF-30%
+var exhausted_turns: int = 0     # 脱力剩余回合数（挥锤=1；被吕布打飞这类重伤=多回合）
 var is_protect_target: bool = false # 战场需誓死护卫的核心目标（阵亡直接判负）
 
 # ===== 装备/词条全局加成（P0-1 修复：让抽奖真正生效）=====
@@ -145,9 +146,15 @@ func end_turn() -> void:
 		stun_turns -= 1
 	if "hua_rage" in skill_ids and alive:
 		hua_rage_turns += 1
-	if exhausted:
-		exhausted = false
+	if exhausted_turns > 0:
+		exhausted_turns -= 1
+	exhausted = exhausted_turns > 0
 	# 注意：吕布连击跨回合累积（end_turn 不清零），只有被打晕(fangtian_reset)才打断
+
+## 施加脱力。取较长者（不叠加）：挥锤=1 回合；被吕布打飞这类重伤=数回合
+func set_exhausted(turns: int) -> void:
+	exhausted_turns = maxi(exhausted_turns, turns)
+	exhausted = exhausted_turns > 0
 
 ## 吕布出击：推进连击计数（供敌方AI调用）
 func fangtian_strike() -> void:
@@ -195,6 +202,7 @@ func to_dict() -> Dictionary:
 		"mount": mount.duplicate(),
 		"iron_skin": iron_skin, "zhaoyun_strike_count": zhaoyun_strike_count,
 		"gate_broken_debuff": gate_broken_debuff, "exhausted": exhausted,
+		"exhausted_turns": exhausted_turns,
 	}
 
 ## 是否为骑兵系（十字4向攻击，不可斜打）

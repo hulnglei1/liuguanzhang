@@ -2821,7 +2821,38 @@ func _check_turn_events() -> void:
 	for ev in chapter["events"]:
 		if ev.turn == turn_state.turn and ev.type == "dialog" and ev.key not in queued_events:
 			queued_events.append(ev.key)
+			# 事件可附带战场效果（数据驱动）。用于让"剧情描写"与"单位状态"一致：
+			# 例如第 2 关剧情说武安国被吕布打飞、吐血脱力，那他的血条和 DEF 就得真的变。
+			if ev.has("effect"):
+				_apply_event_effect(ev["effect"])
 			_play_dialog(ev.key)
+
+## 战场事件效果（数据来自 chapterN.json 的 events[].effect，见《游戏设计文档》）
+## kind = "smash_unit"：某单位被三倍暴击打飞 —— 扣血（保底不死）+ 长期脱力
+func _apply_event_effect(fx: Dictionary) -> void:
+	match str(fx.get("kind", "")):
+		"smash_unit":
+			var victim: BattleUnitScript = _unit_by_id(str(fx.get("target", "")))
+			if victim == null or not victim.alive:
+				return
+			var by: BattleUnitScript = _unit_by_id(str(fx.get("by", "")))
+			var turns: int = int(fx.get("exhausted_turns", 3))
+			victim.set_exhausted(turns)
+			# 扣血：按"施暴者攻击 × mult"算，但保底留下 hp_floor_ratio 的最大生命
+			# （原著里武安国是"吐血脱力"被人抬下去，不是当场战死）
+			if victim.hp > 1:
+				var atk: int = by.effective_atk() if by != null else 30
+				var raw: int = CombatCore.damage(atk, float(fx.get("mult", 3.0)), victim.effective_def())
+				var floor_hp: int = maxi(1, int(ceil(float(victim.max_hp) * float(fx.get("hp_floor_ratio", 0.3)))))
+				var dmg: int = clampi(raw, 1, maxi(1, victim.hp - floor_hp))
+				victim.take_damage(dmg)
+				_spawn_float_text(victim.cell, "💥 被方天画戟打飞！-%d" % dmg, Color(1.0, 0.35, 0.3), true)
+				_spawn_burst(victim.cell, Color(1.0, 0.4, 0.3, 0.6), 2)
+				_shake_camera(5.0)
+				_sync_text(victim)
+				info_label.text += "\n%s 被吕布第三击轰飞！吐血脱力 %d 回合（DEF-30%%）！" % [victim.name, turns]
+			else:
+				info_label.text += "\n%s 已是强弩之末，只脱力不扣血。" % victim.name
 
 func _play_dialog(key: String) -> void:
 	var actual_key := key

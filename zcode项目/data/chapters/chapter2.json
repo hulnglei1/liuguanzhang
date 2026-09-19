@@ -94,7 +94,15 @@
             "turn": 3,
             "type": "dialog",
             "key": "chapter2_wuanguo_fall",
-            "once": true
+            "once": true,
+            "effect": {
+                "kind": "smash_unit",
+                "target": "wuanguo",
+                "by": "lubu",
+                "mult": 3.0,
+                "hp_floor_ratio": 0.3,
+                "exhausted_turns": 3
+            }
         },
         {
             "turn": 4,

@@ -67,9 +67,9 @@ static func do_attack(caster, target) -> Array:
 	var ev: Array = [CombatCore.make_damage_event(target.id, dmg, false)]
 	if target.iron_skin:
 		ev.append({"type": "iron_skin_block", "target": target.id})
-	# 武安国铁锤猛击后脱力
+	# 武安国铁锤猛击后脱力（1 回合）
 	if "wuanguo_power" in caster.skill_ids:
-		caster.exhausted = true
+		caster.set_exhausted(1)
 		ev.append({"type": "exhausted", "target": caster.id})
 	if not target.alive:
 		ev.append({"type": "death", "target": target.id})
