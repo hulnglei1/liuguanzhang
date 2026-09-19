@@ -26,7 +26,15 @@ GODOT = GAME_ROOT / ".tools" / "godot_extracted" / "Godot_v4.7.2-stable_win64_co
 SKIP = {"capture_visual_showcase", "director_promo", "demo_virtual_player_live",
         "live_headed_multiverse", "live_headed_tester", "test_virtual_player"}
 
-FAIL_PAT = re.compile(r"SCRIPT ERROR|Parse Error|\[FAIL\]|超时未完成|失败 [1-9]\d* 项")
+FAIL_PAT = re.compile(r"SCRIPT ERROR|Parse Error|\[FAIL\]|超时未完成|失败 [1-9]\d* 项|未通关")
+
+# 这些测试要完整打一遍关卡，耗时远超默认 90 秒
+SLOW = {
+    "probe_player_styles": 360,   # 4 种玩家风格各打一遍第一关
+    "probe_player_view": 200,     # 主菜单→序章→战场全流程
+    "probe_space_endturn": 200,   # 多个回合流转
+    "probe_chaos": 200,           # 随机操作 100+ 步
+}
 
 
 def discover() -> list[Path]:
@@ -35,6 +43,8 @@ def discover() -> list[Path]:
 
 
 def run_one(path: Path, timeout: int = 90) -> tuple[bool, str, float]:
+    # 少数测试天生慢（要完整打一遍关卡），单独放宽超时
+    timeout = SLOW.get(path.stem, timeout)
     cmd = [str(GODOT), "--headless", "--path", str(ROOT), "--script",
            f"res://tests/{path.name}"]
     t0 = time.time()
