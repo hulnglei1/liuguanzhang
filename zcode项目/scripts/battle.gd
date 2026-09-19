@@ -15,7 +15,7 @@ const LotteryCore := preload("res://scripts/systems/lottery.gd")
 const SaveCore := preload("res://scripts/systems/save.gd")
 const BondsCore := preload("res://scripts/systems/bonds.gd")
 const PortraitLoaderCore := preload("res://scripts/ui/portrait_loader.gd")
-const UnitArtLoaderCore := preload("res://scripts/ui/unit_art.gd")
+const UnitViewCore := preload("res://scripts/ui/unit_view.gd")
 const ObjectivesCore := preload("res://scripts/core/objectives.gd")
 
 const TILE := 52.0          # 格子像素（升级为52以充实画面）
@@ -929,36 +929,10 @@ func _make_unit_node(u) -> Node2D:
 	char_lbl.add_theme_color_override("font_color", Color(1, 0.98, 0.92))
 	node.add_child(char_lbl)
 
-	# 4.5 单位贴图与动画（复用 Godot 原生 AnimatedSprite2D 轮子能力）
-	var art_frames := UnitArtLoaderCore.load_frames_for(u.id)
-	var art := UnitArtLoaderCore.load_for(u.id)
-	if art_frames != null:
-		var anim_spr := AnimatedSprite2D.new()
-		anim_spr.name = "ArtAnim"
-		anim_spr.sprite_frames = art_frames
-		anim_spr.animation = "idle"
-		anim_spr.play("idle")
-		anim_spr.centered = true
-		var ref_tex := art if art != null else art_frames.get_frame_texture("idle", 0)
-		var tex_h: float = float(ref_tex.get_height()) if ref_tex != null else 192.0
-		var target_h := TILE * 1.35
-		var s := target_h / maxf(1.0, tex_h)
-		anim_spr.scale = Vector2(s, s)
-		anim_spr.position = Vector2(0, -target_h * 0.5 + 6.0)
-		node.add_child(anim_spr)
-		plate.visible = false
-		char_lbl.visible = false
-	elif art != null:
-		var spr := Sprite2D.new()
-		spr.name = "Art"
-		spr.texture = art
-		spr.centered = true
-		# 让贴图脚底落在格子中心，高度约 1.35 格
-		var target_h := TILE * 1.35
-		var s := target_h / float(maxi(1, art.get_height()))
-		spr.scale = Vector2(s, s)
-		spr.position = Vector2(0, -target_h * 0.5 + 6.0)
-		node.add_child(spr)
+	# 4.5 单位贴图与序列帧动画
+	#     实现全部在 scripts/ui/unit_view.gd（视觉层，动画侧维护）——机制侧只管调用
+	var used_art: bool = UnitViewCore.build_art(node, u.id, TILE)
+	if used_art:
 		plate.visible = false
 		char_lbl.visible = false
 
@@ -2492,36 +2466,11 @@ func _unit_bounce(id: String) -> void:
 
 ## 播放单位攻击动作动画与冲刺打击感（复用 AnimatedSprite2D 与 Tween 轮子能力）
 func _play_unit_attack_anim(attacker_id: String, target_cell: Vector2i) -> void:
+	## 攻击演出：实现全部在 scripts/ui/unit_view.gd（视觉层，动画侧维护）
 	var node: Node2D = unit_nodes.get(attacker_id)
 	if node == null:
 		return
-	var from_pos: Vector2 = node.position
-	var target_px: Vector2 = _cell_to_px(target_cell)
-	var dir_x: float = target_px.x - from_pos.x
-	
-	# 1. 翻转朝向：面向攻击目标
-	var anim_spr: AnimatedSprite2D = node.get_node_or_null("ArtAnim")
-	var static_spr: Sprite2D = node.get_node_or_null("Art")
-	
-	if anim_spr != null:
-		if absf(dir_x) > 2.0:
-			anim_spr.flip_h = (dir_x < 0.0)
-		# 播放攻击帧序列，播完复位回 idle
-		if anim_spr.sprite_frames and anim_spr.sprite_frames.has_animation("attack"):
-			anim_spr.play("attack")
-			anim_spr.animation_finished.connect(func():
-				if is_instance_valid(anim_spr):
-					anim_spr.play("idle")
-			, CONNECT_ONE_SHOT)
-	elif static_spr != null:
-		if absf(dir_x) > 2.0:
-			static_spr.flip_h = (dir_x < 0.0)
-
-	# 2. 物理冲刺位移打击感（Tween 前刺 + 回弹）
-	var offset: Vector2 = (target_px - from_pos).normalized() * 14.0
-	var tw := create_tween()
-	tw.tween_property(node, "position", from_pos + offset, 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(node, "position", from_pos, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	UnitViewCore.play_attack(node, _cell_to_px(target_cell))
 
 ## 生成在空中定速飞行的回旋飞弹视觉节点
 func _spawn_homing_arrow_node(arr: Dictionary) -> void:
