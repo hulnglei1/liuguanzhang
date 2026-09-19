@@ -10,7 +10,9 @@
 退出码：0 全过；1 有失败
 """
 import argparse
+import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -97,5 +99,26 @@ def main() -> int:
     return 0
 
 
+def _user_save_path() -> Path:
+    """玩家真实存档位置：%APPDATA%/Godot/app_userdata/<项目名>/save.json"""
+    appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
+    return Path(appdata) / "Godot" / "app_userdata" / "魂穿刘关张 · 战棋" / "save.json"
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    # 保护玩家进度：测试脚本会反复重置存档（SaveCore.new_state()），
+    # 直接跑会把玩家辛苦打出来的章节/声望/背包全清掉。
+    # 所以跑测试前先备份、跑完（无论成败）还原。
+    _save = _user_save_path()
+    _bak = _save.parent / (_save.name + ".userbak")
+    _had_save = _save.exists()
+    if _had_save:
+        shutil.copy2(_save, _bak)
+    try:
+        _code = main()
+    finally:
+        if _had_save and _bak.exists():
+            shutil.copy2(_bak, _save)
+            _bak.unlink()
+            print("\n[已还原玩家存档] 测试过程重置的进度已恢复：%s" % _save)
+    sys.exit(_code)
