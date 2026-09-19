@@ -91,6 +91,7 @@ var gate_broken := false
 var stages: Array = []           # 曹操传式分阶段军令（数据来自 chapter["stages"]）
 var stage_idx: int = 0           # 当前阶段下标
 var pending_end_turn := false    # 空格结束回合的二次确认（防止没行动就被跳过）
+var defeat := false              # 战败标记：置位后停止一切操作（防"全灭后回合空转卡死"）
 var obstacle_nodes: Dictionary = {}
 var active_arrows: Array = []          # 战场中正在飞行的回旋飞弹
 var arrow_nodes: Dictionary = {}       # arrow_id -> Node2D（飞弹视觉节点）
@@ -1170,6 +1171,10 @@ func _input(event: InputEvent) -> void:
 				return
 		return
 
+	# 战败/胜利结算后不再接受战棋操作（对白仍可推进）
+	if defeat or victory:
+		return
+
 	# 3. 空格 = 结束我方回合（对白/喊字阶段已在上方拦截）
 	#    有未行动单位时先警告，再按一次才确认 —— 避免"没行动就被跳过"
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
@@ -1283,6 +1288,11 @@ func _unit_at(cell: Vector2i) -> BattleUnitScript:
 
 ## 选中单位：高亮移动格 + 显示命令菜单
 func _select_unit(id: String) -> void:
+	# 切换到别的单位时，清空"已移动"上下文
+	# （move_origin_cell 是关卡级变量，不清的话：移动 A 之后去选 B，B 会被误判为"已移动"而无法行动）
+	if id != selected_id:
+		move_origin_cell = Vector2i(-1, -1)
+		move_gained_charge = 0
 	selected_id = id
 	pending_end_turn = false   # 玩家一旦开始操作，取消"结束回合"的待确认状态
 	var u: BattleUnitScript = _unit_by_id(id)
@@ -1603,6 +1613,7 @@ func _cmd_undo_move() -> void:
 		if "dragon_slash" in u.skill_ids:
 			u.charge = maxi(0, u.charge - move_gained_charge)
 		move_origin_cell = Vector2i(-1, -1)
+		u.moved_this_turn = false    # 撤回移动后，本回合可以重新移动
 		move_gained_charge = 0
 		_sync_text(u)
 		info_label.text = "已撤回移动，【%s】回到原位。" % u.name
@@ -1711,6 +1722,14 @@ func _is_in_reachable(cell: Vector2i) -> bool:
 
 func _do_move(cell: Vector2i) -> void:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
+	if u == null or not u.alive:
+		return
+	# 防御：本回合已经移动过的单位不能再移动（单位级状态，换人也不会被绕过）
+	if u.moved_this_turn:
+		info_label.text = "%s 本回合已经移动过了（移动后只能攻击 / 绝技 / 待机 / 撤回移动）" % u.name
+		_show_command_menu()
+		return
+	u.moved_this_turn = true
 	var blocked := _blocked_cells(selected_id)
 	var path := GridCore.path(u.cell, cell, MAP_W, MAP_H, blocked)
 	var moved_cells := path.size()
@@ -2579,6 +2598,9 @@ func _adjust_morale(player_delta: int, enemy_delta: int) -> void:
 
 ## ---------- 回合流转 ----------
 func _after_action(u) -> void:
+	# 战败后不再推进回合作业（避免全灭后回合空转）
+	if defeat:
+		return
 	# 赵云【无限耐力】：行动结束后自愈 15% HP（无需干粮）
 	var zhaoyun := _unit_by_id("zhaoyun")
 	if zhaoyun and zhaoyun.alive and (u.id == "zhaoyun" or (u.is_mounted() and u.mount.get("horse") == "zhaoyun")):
@@ -2775,9 +2797,12 @@ func _ai_attack(u, target) -> void:
 		_check_defeat()
 
 func _begin_player_turn() -> void:
+	if defeat or victory:
+		return
 	_update_homing_arrows()
 	for u in _camp_units("player"):
 		u.acted = false
+		u.moved_this_turn = false    # 新回合：重置"已移动"状态
 		# 玉米种子回血：每回合开始时自动恢复生命
 		if u.alive and u.hp_regen > 0 and u.hp < u.max_hp:
 			var heal: int = mini(u.hp_regen, u.max_hp - u.hp)
@@ -2858,6 +2883,9 @@ func _on_dialog_btn_pressed() -> void:
 		# 对话结束后：若是胜利对话，进入结算
 		if win_dialog_played:
 			_go_to_result()
+		elif defeat:
+			# 战败：退回主菜单重整旗鼓（此前只播对白不结束，玩家只能强退）
+			get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 func _on_dialog_skip_pressed() -> void:
 	pending_dialog.clear()
@@ -3004,8 +3032,20 @@ func _handle_commander_defeat(commander: BattleUnitScript) -> void:
 	_show_win_dialog()
 
 func _check_defeat() -> bool:
+	if defeat:
+		return true
+	if victory:
+		return false
 	var players := _camp_units("player")
 	if players.size() == 0:
+		# 关键：必须置位结束标记
+		# 否则我方全灭后回合会一直空转、失败对白被反复播放，玩家只能强退（实测"游戏卡住"）
+		defeat = true
+		input_mode = InputMode.NONE
+		selected_id = ""
+		command_menu.visible = false
+		_clear_overlay()
+		_spawn_banner("💀 我军全军覆没…", Color(1.0, 0.35, 0.3))
 		_play_dialog(chapter_id + "_lose")
 		return true
 	return false

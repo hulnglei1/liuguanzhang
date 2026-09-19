@@ -225,8 +225,10 @@ static func do_arrow_rain(caster, target, all_units: Array = []) -> Array:
 	}
 	caster.start_cd("arrow_rain", meta("arrow_rain").cd)
 	
-	# 若目标就在 3 格之内，飞弹当回合即直达命中
-	if dist <= 3:
+	# 贴身（相邻 1 格）才当回合直达命中；
+	# 其余距离一律射出飞弹飞过去 —— 否则玩家在全图范围内点选，
+	# 3 格内的目标"瞬间命中"，看起来就像箭根本没射出去（玩家实测反馈的问题）
+	if dist <= 1:
 		var dmg: int = CombatCore.damage(caster.effective_atk(), 1.0, target.effective_def())
 		target.take_damage(dmg)
 		var ev: Array = [

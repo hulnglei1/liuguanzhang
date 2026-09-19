@@ -48,6 +48,7 @@ var atk_pct_bonus: float = 1.0  # 番薯种子攻+10%
 var hp_regen: int = 0      # 玉米种子每回合回血
 var refuse_penalty: float = 1.0 # 不应战惩罚倍率（敌×2）
 var mount: Dictionary = {}   # {rider: id, horse: id} 合体状态
+var moved_this_turn: bool = false    # 本回合是否已移动过（单位级状态，防止重复移动）
 var dragon_guard_used: bool = false  # 关羽骑赵云时「赵云硬扛」——每关免一次蓄力清零
 
 ## 从 data/units.json 的字典构造

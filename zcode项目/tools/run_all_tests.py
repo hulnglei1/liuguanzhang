@@ -93,7 +93,7 @@ def main() -> int:
         for name, msg in bad:
             print(f"  - {name}: {msg}")
         return 1
-    print("全部通过 ✅")
+    print("全部通过 [PASS]")
     return 0
 
 
