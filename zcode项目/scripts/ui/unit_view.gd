@@ -129,8 +129,74 @@ static func play_attack(node: Node2D, target_px: Vector2) -> void:
 	)
 
 
-## ---------- 四、全屏特效层 ----------
+## ---------- 三点五、飞行道具：箭矢 ----------
 
+## 创建一支飞行中的箭（公孙瓒·白马回旋飞弹），默认朝 +X，按飞行方向自动旋转。
+##
+## 用户反馈"箭头不太像" —— 原来只是一个 emoji 标签（🎯🏹）。
+## 这里改成几何图形：外层青光（拖尾感）+ 两片尾羽 + 箭杆 + 箭头 + 高光点。
+static func create_arrow_node(from_px: Vector2, to_px: Vector2) -> Node2D:
+	var node := Node2D.new()
+	node.name = "Arrow"
+	node.position = from_px
+	node.z_index = 70
+	var dir: Vector2 = to_px - from_px
+	if dir.length() > 0.01:
+		node.rotation = dir.angle()
+
+	# 外层青光（拖尾/破空感）
+	var glow := Polygon2D.new()
+	glow.polygon = PackedVector2Array([
+		Vector2(-22, -1.2), Vector2(-6, -7.0), Vector2(16, -8.0),
+		Vector2(22, 0), Vector2(16, 8.0), Vector2(-6, 7.0), Vector2(-22, 1.2),
+	])
+	glow.color = Color(0.35, 0.8, 1.0, 0.22)
+	node.add_child(glow)
+
+	# 两片尾羽
+	for sign_y in [-1.0, 1.0]:
+		var feather := Polygon2D.new()
+		feather.polygon = PackedVector2Array([
+			Vector2(-18, 0), Vector2(-10, 6.0 * sign_y), Vector2(-13, 0.8 * sign_y),
+		])
+		feather.color = Color(0.32, 0.7, 0.95)
+		node.add_child(feather)
+
+	# 箭杆
+	var shaft := Polygon2D.new()
+	shaft.polygon = PackedVector2Array([
+		Vector2(-16, -1.5), Vector2(7, -1.5), Vector2(7, 1.5), Vector2(-16, 1.5),
+	])
+	shaft.color = Color(0.84, 0.89, 0.94)
+	node.add_child(shaft)
+
+	# 箭头
+	var head := Polygon2D.new()
+	head.polygon = PackedVector2Array([
+		Vector2(20, 0), Vector2(6, -6.5), Vector2(6, 6.5),
+	])
+	head.color = Color(0.95, 0.99, 1.0)
+	node.add_child(head)
+
+	# 箭头高光（深色战场上更容易看清）
+	var tip := Polygon2D.new()
+	tip.polygon = PackedVector2Array([Vector2(13, 0), Vector2(3, -2.4), Vector2(3, 2.4)])
+	tip.color = Color(0.55, 0.95, 1.0)
+	node.add_child(tip)
+
+	return node
+
+
+## 让节点朝向某个像素位置（箭矢飞行中转向用）
+static func face_to(node: Node2D, target_px: Vector2) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	var dir: Vector2 = target_px - node.position
+	if dir.length() > 0.01:
+		node.rotation = dir.angle()
+
+
+## ---------- 四、全屏特效层 ----------
 ## 确保存在"独立全屏特效层"。刀光/斩击/爆发都挂到这里，
 ## 与单位节点解耦——单位移动/死亡/重生都不会影响特效，反之亦然。
 ## 调用一次即可（重复调用返回同一个节点）。

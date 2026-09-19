@@ -1391,7 +1391,17 @@ func _show_command_menu() -> void:
 			btn_skill.text = "✨ 咆哮·连点喊字%s" % ("" if ready else "(CD)")
 		else:
 			btn_skill.text = "✨ %s%s" % [skill_name, "" if ready else "(CD)"]
-		btn_skill.disabled = not ready or not _has_skill_target(u, skill_id)
+		# 禁用原因直接写在按钮上 —— 别让玩家对着灰按钮猜为什么点不动
+		var has_target: bool = _has_skill_target(u, skill_id)
+		if not ready:
+			var cd_left: int = int(u.cds.get(skill_id, 0))
+			var cd_txt: String = " ·CD剩%d" % cd_left if cd_left > 0 else " ·眩晕中"
+			btn_skill.text += cd_txt
+			btn_skill.tooltip_text = "冷却中：还要 %d 回合" % cd_left
+		elif not has_target:
+			btn_skill.text += " ·无目标"
+			btn_skill.tooltip_text = _skill_no_target_hint(u, skill_id)
+		btn_skill.disabled = not ready or not has_target
 		btn_skill.pressed.connect(_cmd_skill)
 		list_vbox.add_child(btn_skill)
 
@@ -1627,11 +1637,17 @@ func _has_attackable_target(u) -> bool:
 
 func _has_skill_target(u, skill_id: String) -> bool:
 	if skill_id == "dragon_slash":
+		# ① 相邻 4 向有敌人（青龙斩贴脸出刀，沿直线贯穿其身后）
 		for d in GridCore.DIRS4:
 			var c: Vector2i = u.cell + d
 			var enemy := _unit_at(c)
 			if enemy and enemy.alive and enemy.camp != u.camp:
 				return true
+		# ② 直线上有未破的城门（第 1 关「劈关夺门」）
+		#    少了这一条，华雄一死、周围没敌人时，关羽的技能按钮会一直灰着 ——
+		#    玩家明明蓄满了 10 格却点不动，整个阶段 2 无法完成。
+		if _has_slashable_gate(u):
+			return true
 		return false
 	elif skill_id == "naked_armor":
 		return true
@@ -1642,6 +1658,18 @@ func _has_skill_target(u, skill_id: String) -> bool:
 		if t.alive and t.camp != u.camp:
 			return true
 	return false
+
+## 技能按钮因"没有目标"而禁用时的说明（写进 tooltip，并在 info_label 里给一句）
+func _skill_no_target_hint(u, skill_id: String) -> String:
+	match skill_id:
+		"dragon_slash":
+			return "青龙斩需贴身出刀：站到敌人【上/下/左/右相邻格】；\n劈城门则站到与城门【同一行或同一列】且距离在贯穿格数内"
+		"roar":
+			return "被眩晕，本回合无法咆哮"
+		"arrow_rain":
+			return "全图索敌：点任意敌军即可（无距离限制）"
+		_:
+			return "射程内没有可选目标"
 
 func _cmd_move() -> void:
 	input_mode = InputMode.MOVE
@@ -1887,6 +1915,17 @@ func _can_slash_gate(u, cell: Vector2i) -> bool:
 	var dist: int = absi(diff.x) + absi(diff.y)
 	var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
 	return dist <= int(dt.get("line_len", 1))
+
+## 关羽的直线上是否有"当前就能劈到"的城门（供技能按钮可用性判断）
+func _has_slashable_gate(u) -> bool:
+	if gate_broken or not chapter.has("map"):
+		return false
+	for o in chapter["map"].get("obstacles", []):
+		if bool(o.get("is_gate", false)):
+			var g := Vector2i(int(o.get("x", -1)), int(o.get("y", -1)))
+			if _can_slash_gate(u, g):
+				return true
+	return false
 
 func _is_in_skill_range(cell: Vector2i) -> bool:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
@@ -2145,6 +2184,9 @@ func _apply_events(events: Array) -> void:
 							lubu.add_rage()
 							info_label.text += "\n吕布暴怒！攻击力暴涨！(×1.5)"
 							_play_dialog("ch2_lubu_rage")
+					# 华雄「虎牢狂力」：斩将叠层（原著：华雄连斩联军数将，越战越勇）
+					if t2.camp == "player":
+						_on_player_unit_killed(t2)
 			"iron_skin":
 				var tar := _unit_by_id(ev.target)
 				if tar:
@@ -2496,20 +2538,26 @@ func _play_unit_attack_anim(attacker_id: String, target_cell: Vector2i) -> void:
 ## 生成在空中定速飞行的回旋飞弹视觉节点
 func _spawn_homing_arrow_node(arr: Dictionary) -> void:
 	active_arrows.append(arr)
-	var node := Node2D.new()
-	node.position = _cell_to_px(arr.cell)
-	node.z_index = 60
-	
-	var lbl := Label.new()
-	lbl.text = "🎯🏹"
-	lbl.add_theme_font_size_override("font_size", 16)
-	lbl.add_theme_color_override("font_color", Color(0.4, 0.9, 1.0))
-	lbl.position = Vector2(-16, -16)
-	node.add_child(lbl)
-	
+	# 视觉（箭头 + 箭杆 + 尾羽）全部在 scripts/ui/unit_view.gd，机制侧只负责挂载
+	var node: Node2D = UnitViewCore.create_arrow_node(_cell_to_px(arr.cell), _cell_to_px(arr.target_cell))
 	unit_root.add_child(node)
 	arrow_nodes[arr.id] = node
 	info_label.text += "\n🏹 公孙瓒射出定速回旋飞弹！正以每回合3格速度奔袭索敌！"
+
+## 我方单位阵亡时的连锁反应：华雄「虎牢狂力」斩将叠层
+## 原著：华雄连斩联军数将，越战越勇 —— 所以是「斩将叠层」+「每回合也在涨」，拖得越久越难打
+## 近似处理：不区分具体是谁下的手（第一关能击穿我方的，基本只有华雄本人）
+func _on_player_unit_killed(victim) -> void:
+	if victim == null or victim.camp != "player":
+		return
+	var hx: BattleUnitScript = _unit_by_id("huaxiong")
+	if hx == null or not hx.alive:
+		return
+	hx.hua_rage_turns += 1
+	_spawn_float_text(hx.cell, "☠ 斩将！虎牢狂力 +1 层", Color(1.0, 0.5, 0.2), true)
+	_spawn_banner("☠ %s 被斩！华雄力量再涨一层（第 %d 层）" % [victim.name, hx.hua_rage_turns], Color(1.0, 0.6, 0.25))
+	info_label.text += "\n%s 阵亡，华雄越战越勇！" % victim.name
+	_sync_text(hx)
 
 ## 在回合流转时推进战场上所有飞行中的定速回旋飞弹
 func _update_homing_arrows() -> void:
@@ -2522,6 +2570,7 @@ func _update_homing_arrows() -> void:
 				var node: Node2D = arrow_nodes.get(ev.arrow_id)
 				if node and is_instance_valid(node):
 					var target_px: Vector2 = _cell_to_px(ev.to_cell)
+					UnitViewCore.face_to(node, target_px)      # 飞行中转向目标
 					var tw := create_tween()
 					tw.tween_property(node, "position", target_px, 0.35).set_trans(Tween.TRANS_SINE)
 			"arrow_hit":

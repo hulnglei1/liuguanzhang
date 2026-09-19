@@ -48,6 +48,16 @@
             "unit": "gongsunzan",
             "x": 2,
             "y": 3
+        },
+        {
+            "unit": "yi_bing_1",
+            "x": 0,
+            "y": 4
+        },
+        {
+            "unit": "yi_bing_2",
+            "x": 0,
+            "y": 6
         }
     ],
     "enemy_spawn": [
@@ -113,7 +123,7 @@
         {
             "id": "behead",
             "title": "温酒斩华雄",
-            "objective": "斩杀关前列阵的【华雄】（每拖延 1 回合他的力量就涨一层，拖得越久越难打）",
+            "objective": "斩杀关前列阵的【华雄】（他每斩我一将就叠一层力量，每拖一回合也会涨——拖得越久越难打）",
             "win": {
                 "type": "kill_commander"
             },

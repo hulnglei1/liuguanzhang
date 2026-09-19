@@ -55,6 +55,7 @@ func _run() -> void:
 	await _test_initial_state()
 	await _test_opening_event()
 	await _test_gate_reach()
+	await _test_guanyu_skill_available()
 	await _test_gate_too_weak()
 	await _test_huaxiong_stack()
 	await _test_charge_reset()
@@ -99,9 +100,16 @@ func _test_initial_state() -> void:
 		int(b.morale["player"]), int(b.morale["enemy"])])
 	_check(int(b.stages.size()) == 2, "第一阶段分两个军令")
 	_check(int(b.stage_idx) == 0, "开局停在阶段 1「温酒斩华雄」")
-	_check(n_player == 4, "我方 4 人（刘关张 + 公孙瓒）")
+	_check(n_player == 6, "我方 6 人（刘关张 + 公孙瓒 + 2 义军）")
 	_check(n_enemy == 5, "敌方 5 人（华雄 + 2 刀兵 + 2 弓兵）")
 	_check(int(b.morale["player"]) >= 110, "【桃园结义】生效：开局士气 110（100+10）")
+	# 小兵血量：张飞 14 字咆哮约 53 伤害，血量太低会被一吼带走（玩家反馈过）
+	var dao0 = b._unit_by_id("dao_bing_1")
+	var gong0 = b._unit_by_id("gong_bing_1")
+	_check(dao0.max_hp >= 75, "敌方刀兵 %d 血 ≥75（一嗓子吼不死）" % dao0.max_hp)
+	_check(gong0.max_hp >= 65, "敌方弓兵 %d 血 ≥65" % gong0.max_hp)
+	var yi = b._unit_by_id("yi_bing_1")
+	_check(yi != null and yi.camp == "player", "我方带小兵（义军），可被华雄斩杀来喂他的绝技")
 
 
 func _test_opening_event() -> void:
@@ -124,6 +132,30 @@ func _test_gate_reach() -> void:
 
 
 ## 蓄力不足点到城门：不能白丢一整回合
+## 关羽技能可用性：用户反馈"技能一直灰色点不出来，不管有没有靠近敌人"
+## 根因：_has_skill_target 只认"相邻敌人"，没把"可劈的城门"算进去 →
+##       华雄一死、周围没敌人时按钮永远灰着，整个阶段 2 劈不了门。
+func _test_guanyu_skill_available() -> void:
+	print("\n---- 3b. 关羽技能可用性 ----")
+	var gy = b._unit_by_id("guanyu")
+	var origin: Vector2i = gy.cell
+	var charge0: int = gy.charge
+
+	gy.cell = Vector2i(3, 3)                      # 周围无敌人、也与城门不同直线
+	gy.charge = 0
+	_check(not b._has_skill_target(gy, "dragon_slash"), "孤立无目标时按钮不可用（正常，应显示「无目标」）")
+
+	gy.cell = Vector2i(4, 4)                      # dao_bing_1 在 (5,4)
+	_check(b._has_skill_target(gy, "dragon_slash"), "站到敌人相邻格 → 技能可用")
+
+	gy.cell = Vector2i(7, 4)                      # 与城门 (10,4) 同排、距离 3
+	gy.charge = 10
+	_check(b._has_skill_target(gy, "dragon_slash"), "与城门同排且蓄满 → 技能可用（此前会灰着，阶段 2 卡死）")
+
+	gy.cell = origin
+	gy.charge = charge0
+
+
 func _test_gate_too_weak() -> void:
 	print("\n---- 4. 蓄力不足劈门 ----")
 	var gy = b._unit_by_id("guanyu")
@@ -152,6 +184,16 @@ func _test_huaxiong_stack() -> void:
 		atk0, atk3, hx.hua_rage_turns, CombatCore.hua_boost_multiplier(hx.hua_rage_turns)])
 	_check(hx.hua_rage_turns == 3, "拖 3 回合 = 叠 3 层")
 	_check(atk3 > atk0, "拖得越久华雄越强（与面板/军令文案一致）")
+
+	# 斩将叠层：我方小兵阵亡 → 华雄再叠一层（原著"连斩联军数将"）
+	var before: int = hx.hua_rage_turns
+	var yi = b._unit_by_id("yi_bing_1")
+	yi.hp = 0
+	yi.alive = false
+	b._apply_events([{"type": "death", "target": "yi_bing_1"}])
+	await _wait(0.4)
+	print("  义军阵亡后叠层：%d → %d" % [before, hx.hua_rage_turns])
+	_check(hx.hua_rage_turns == before + 1, "我方阵亡 → 华雄「斩将」再叠一层")
 
 
 func _test_charge_reset() -> void:

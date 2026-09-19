@@ -78,7 +78,7 @@
             "name": "董卓刀兵",
             "cls": "刀兵",
             "camp": "enemy",
-            "hp": 55,
+            "hp": 80,
             "atk": 10,
             "def": 4,
             "mov": 3,
@@ -91,7 +91,7 @@
             "name": "董卓刀兵",
             "cls": "刀兵",
             "camp": "enemy",
-            "hp": 55,
+            "hp": 80,
             "atk": 10,
             "def": 4,
             "mov": 3,
@@ -104,7 +104,7 @@
             "name": "董卓弓兵",
             "cls": "弓兵",
             "camp": "enemy",
-            "hp": 50,
+            "hp": 70,
             "atk": 14,
             "def": 5,
             "mov": 3,
@@ -117,7 +117,7 @@
             "name": "董卓弓兵",
             "cls": "弓兵",
             "camp": "enemy",
-            "hp": 50,
+            "hp": 70,
             "atk": 14,
             "def": 5,
             "mov": 3,
@@ -415,6 +415,32 @@
                 "dianwei_brute"
             ],
             "is_commander": true
+        },
+        {
+            "id": "yi_bing_1",
+            "name": "义军",
+            "cls": "刀兵",
+            "camp": "player",
+            "hp": 78,
+            "atk": 12,
+            "def": 6,
+            "mov": 3,
+            "rng": 1,
+            "skills": [],
+            "is_commander": false
+        },
+        {
+            "id": "yi_bing_2",
+            "name": "义军",
+            "cls": "刀兵",
+            "camp": "player",
+            "hp": 78,
+            "atk": 12,
+            "def": 6,
+            "mov": 3,
+            "rng": 1,
+            "skills": [],
+            "is_commander": false
         }
     ]
 }

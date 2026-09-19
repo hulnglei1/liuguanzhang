@@ -1,4 +1,4 @@
-[gd_scene format=3 load_steps=6 set_id=1]
+[gd_scene format=3 load_steps=8 set_id=1]
 
 [ext_resource type="Script" path="res://main.gd" id="1_main"]
 [ext_resource type="Shader" path="res://shader_breathing.gdshader" id="2_shader"]
@@ -7,12 +7,16 @@
 [ext_resource type="Texture2D" path="res://assets/enemy_dummy.png" id="5_dummy"]
 [ext_resource type="Texture2D" path="res://assets/s2_body.png" id="6_body"]
 [ext_resource type="Texture2D" path="res://assets/s2_arm_blade.png" id="7_arm"]
+[ext_resource type="Texture2D" path="res://assets/guanyu_portrait.png" id="8_portrait"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_breathing"]
 shader = ExtResource("2_shader")
 shader_parameter/speed = 3.0
 shader_parameter/amplitude = 3.5
 shader_parameter/is_active = true
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_add"]
+blend_mode = 1
 
 [node name="Main" type="Control"]
 layout_mode = 3
@@ -71,7 +75,7 @@ offset_bottom = 60.0
 grow_horizontal = 2
 theme_override_colors/font_color = Color(0.3, 0.9, 0.5, 1)
 theme_override_font_sizes/font_size = 22
-text = "方案 1：战棋黄金法则（整图刚体+Tween冲砍+独立特效）"
+text = "方案 1：战棋黄金法则（整图刚体+Tween冲砍+纯特效）"
 horizontal_alignment = 1
 
 [node name="SubTitle" type="Label" parent="Arena/LeftPanel"]
@@ -108,8 +112,67 @@ texture = ExtResource("5_dummy")
 
 [node name="VFX_Dragon" type="Sprite2D" parent="Arena/LeftPanel"]
 visible = false
-position = Vector2(440, 340)
+material = SubResource("CanvasItemMaterial_add")
+position = Vector2(430, 350)
 texture = ExtResource("4_vfx")
+
+[node name="PortraitCutin" type="Panel" parent="Arena/LeftPanel"]
+visible = false
+layout_mode = 0
+offset_left = 40.0
+offset_top = 110.0
+offset_right = 580.0
+offset_bottom = 220.0
+
+[node name="CutinBg" type="ColorRect" parent="Arena/LeftPanel/PortraitCutin"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.06, 0.14, 0.10, 0.95)
+
+[node name="Border" type="ReferenceRect" parent="Arena/LeftPanel/PortraitCutin"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+border_color = Color(0.3, 0.9, 0.5, 1)
+border_width = 2.0
+editor_only = false
+
+[node name="Avatar" type="TextureRect" parent="Arena/LeftPanel/PortraitCutin"]
+layout_mode = 0
+offset_left = 10.0
+offset_top = 5.0
+offset_right = 110.0
+offset_bottom = 105.0
+texture = ExtResource("8_portrait")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="CutinTitle" type="Label" parent="Arena/LeftPanel/PortraitCutin"]
+layout_mode = 0
+offset_left = 125.0
+offset_top = 15.0
+offset_right = 450.0
+offset_bottom = 45.0
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 18
+text = "【武圣绝招·青龙出渊斩】"
+
+[node name="CutinQuote" type="Label" parent="Arena/LeftPanel/PortraitCutin"]
+layout_mode = 0
+offset_left = 125.0
+offset_top = 50.0
+offset_right = 520.0
+offset_bottom = 95.0
+theme_override_colors/font_color = Color(0.9, 0.95, 0.9, 1)
+theme_override_font_sizes/font_size = 14
+text = "关羽（邪魅歪嘴）：“就凭你也想挡某家一刀？！斩！”"
 
 [node name="StatusLabel" type="Label" parent="Arena/LeftPanel"]
 layout_mode = 1
@@ -253,37 +316,154 @@ anchor_left = 0.5
 anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -480.0
+offset_left = -580.0
 offset_top = -80.0
-offset_right = 480.0
+offset_right = 580.0
 offset_bottom = -25.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_constants/separation = 25
+theme_override_constants/separation = 15
 alignment = 1
 
 [node name="BtnIdle" type="Button" parent="UI/HBox"]
-custom_minimum_size = Vector2(200, 50)
+custom_minimum_size = Vector2(190, 50)
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 15
 text = "1. 待机呼吸对比"
 
 [node name="BtnNormalAtk" type="Button" parent="UI/HBox"]
-custom_minimum_size = Vector2(200, 50)
+custom_minimum_size = Vector2(190, 50)
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
-text = "2. 普通攻击对比 (平砍)"
+theme_override_font_sizes/font_size = 15
+text = "2. 普通攻击 (平砍)"
 
 [node name="BtnUltimateAtk" type="Button" parent="UI/HBox"]
-custom_minimum_size = Vector2(200, 50)
+custom_minimum_size = Vector2(220, 50)
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
-text = "3. 特效大招对比 (青龙斩)"
+theme_override_font_sizes/font_size = 15
+text = "3. 特效大招 (纯青龙斩)"
+
+[node name="BtnPortrait" type="Button" parent="UI/HBox"]
+custom_minimum_size = Vector2(220, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "4. 关羽立绘与全套资产"
 
 [node name="BtnAuto" type="Button" parent="UI/HBox"]
-custom_minimum_size = Vector2(200, 50)
+custom_minimum_size = Vector2(170, 50)
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 15
 toggle_mode = true
-button_pressed = true
-text = "4. 自动循环演示 [开]"
+text = "自动轮播演示"
+
+[node name="PortraitModal" type="Control" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="PortraitModal"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.75)
+
+[node name="Panel" type="Panel" parent="PortraitModal"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -460.0
+offset_top = -280.0
+offset_right = 460.0
+offset_bottom = 260.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Bg" type="ColorRect" parent="PortraitModal/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.12, 0.12, 0.98)
+
+[node name="Border" type="ReferenceRect" parent="PortraitModal/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+border_color = Color(0.3, 0.9, 0.6, 1)
+border_width = 3.0
+editor_only = false
+
+[node name="PortraitDisplay" type="TextureRect" parent="PortraitModal/Panel"]
+layout_mode = 0
+offset_left = 30.0
+offset_top = 30.0
+offset_right = 420.0
+offset_bottom = 510.0
+texture = ExtResource("8_portrait")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="InfoContainer" type="VBoxContainer" parent="PortraitModal/Panel"]
+layout_mode = 0
+offset_left = 440.0
+offset_top = 40.0
+offset_right = 890.0
+offset_bottom = 460.0
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="PortraitModal/Panel/InfoContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_font_sizes/font_size = 22
+text = "【关羽·现代社畜穿越反差萌】"
+
+[node name="Subtitle" type="Label" parent="PortraitModal/Panel/InfoContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 0.6, 1)
+theme_override_font_sizes/font_size = 14
+text = "工业解法1全新母图一体化生成 · 零漂移 · 纯特效解耦"
+
+[node name="HSeparator" type="HSeparator" parent="PortraitModal/Panel/InfoContainer"]
+layout_mode = 2
+
+[node name="Desc" type="Label" parent="PortraitModal/Panel/InfoContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.88, 0.9, 1)
+theme_override_font_sizes/font_size = 14
+text = "🎨 高精对话立绘：512x512 PNG，枣红面、黑长髯、斜睨歪嘴邪魅偷笑。
+🛡️ 战场待机单位：256x256，双脚绝对贴地钉死，GPU Shader微幅呼吸。
+⚔️ 战场发力姿态：256x256，双手持刀下压横扫，Tween动力学极速冲砍。
+🐉 纯独立青龙特效：512x512，纯能量冲击波，彻底根除'两个关羽'重影！
+✨ 工业一致性：1 次 API 调用，画风/装备/色调 100% 绝对统一。"
+autowrap_mode = 3
+
+[node name="BtnClose" type="Button" parent="PortraitModal/Panel"]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = 80.0
+offset_top = -60.0
+offset_right = 320.0
+offset_bottom = -18.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_font_sizes/font_size = 16
+text = "✔ 返回动画对比演练"
