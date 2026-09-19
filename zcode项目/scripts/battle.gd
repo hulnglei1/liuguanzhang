@@ -128,7 +128,8 @@ func _ready() -> void:
 	if not _has_cleared_any_chapter():
 		_show_tutorial()
 	help_btn.pressed.connect(_show_help)
-	_show_open_dialog()
+	_show_open_dialog()      # 内部 = _begin_player_turn()：跑通第 1 回合的事件/回血/旗标
+	_ready_init_title()      # 用更友好的开场文案覆盖"第 1 回合 · 我方行动"
 	_update_hud()
 
 ## 控制对话框与底栏互斥显隐（避免重叠覆盖）
@@ -1873,6 +1874,20 @@ func _is_gate_cell(cell: Vector2i) -> bool:
 			return bool(o.get("is_gate", false))
 	return false
 
+## 青龙斩能否劈到这个城门格：必须与关羽同在一条直线（4 向），且在「贯穿射程」内。
+##
+## 原来的判定是"必须紧贴城门（相邻 1 格）"，导致玩家辛苦蓄满 10 格、
+## 却因为站在 3 格外（比如斩杀华雄的位置）而劈不到门 —— 与"12 格直线贯穿"的技能设定自相矛盾。
+func _can_slash_gate(u, cell: Vector2i) -> bool:
+	var diff: Vector2i = cell - u.cell
+	if diff == Vector2i.ZERO:
+		return false
+	if diff.x != 0 and diff.y != 0:
+		return false                      # 必须在同一行或同一列
+	var dist: int = absi(diff.x) + absi(diff.y)
+	var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
+	return dist <= int(dt.get("line_len", 1))
+
 func _is_in_skill_range(cell: Vector2i) -> bool:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
 	var t: BattleUnitScript = _unit_at(cell)
@@ -1883,7 +1898,7 @@ func _is_in_skill_range(cell: Vector2i) -> bool:
 	if t == null or t.camp == u.camp:
 		# 例外：关羽的千里青龙斩可以直接劈城门（第 1 关「劈关夺门」阶段）
 		if t == null and skill_id == "dragon_slash" and _is_gate_cell(cell):
-			return (cell - u.cell) in GridCore.DIRS4
+			return _can_slash_gate(u, cell)
 		return false
 	match skill_id:
 		"dragon_slash":
@@ -1913,15 +1928,21 @@ func _do_skill(cell: Vector2i) -> void:
 		"dragon_slash":
 			# 劈城门（第 1 关「劈关夺门」阶段）：目标格是城门、没有单位
 			if t == null and _is_gate_cell(cell):
-				if u.charge >= 10:
-					_big_moment("🐉 千里青龙斩 · 劈关夺门！！")
-					_spawn_float_text(cell, "🐉 青龙撞门！", Color(0.3, 1.0, 0.5), true)
-					_shake_camera(10.0)
-					_break_sishui_gate()
-					u.charge = 0
-				else:
+				if u.charge < 10:
+					# 力道不足：**不消耗行动**，玩家可以继续蓄力后再来劈
+					# （否则误点一次就白丢一整回合，而这时候玩家往往正是"差一格"想试试）
 					_spawn_float_text(cell, "🔨 力道不足！", Color(1.0, 0.6, 0.3), true)
-					info_label.text = "汜水关城门厚重！【千里青龙斩】需蓄满 10 格才能一击劈开（当前 %d 格）" % u.charge
+					info_label.text = "汜水关城门厚重！【千里青龙斩】需蓄满 10 格才能一击劈开（当前 %d 格，还差 %d 格）" % [u.charge, 10 - u.charge]
+					_spawn_banner("🔨 力道不足（%d/10）—— 继续蓄力，不必浪费这回合" % u.charge, Color(1.0, 0.75, 0.35))
+					input_mode = InputMode.NONE
+					_clear_overlay()
+					_show_command_menu()
+					return
+				_big_moment("🐉 千里青龙斩 · 劈关夺门！！")
+				_spawn_float_text(cell, "🐉 青龙撞门！", Color(0.3, 1.0, 0.5), true)
+				_shake_camera(10.0)
+				_break_sishui_gate()
+				u.charge = 0
 				u.acted = true
 				move_origin_cell = Vector2i(-1, -1)
 				move_gained_charge = 0
@@ -2813,9 +2834,14 @@ func _check_pressure_flag() -> void:
 		info_label.text += "\n⚠ 敌军援军赶到，敌方全体攻击提升！别拖！"
 
 ## ---------- 事件/对话 ----------
+## 开局 = 第 1 回合开始。必须走 _begin_player_turn()，否则会漏掉一堆第 1 回合的事：
+##   * chapterN.json 里 turn:1 的事件与 effect 永远不会触发（等于死数据）
+##   * 桃园结义每回合回血、玉米种子回血 在第 1 回合不生效
+##   * _check_pressure_flag / _check_turn_events 第 1 回合被跳过
+## 此前这里只硬编码播一句 chapterN_open，看起来"对白正常"，
+## 但事件系统整条链路在第 1 回合是断的（开局对白与 events 定义重复，后者成了摆设）。
 func _show_open_dialog() -> void:
-	# 开场对话 key：ch1_open / ch2_open 由章节决定
-	_play_dialog(chapter_id + "_open")
+	_begin_player_turn()
 
 func _check_turn_events() -> void:
 	for ev in chapter["events"]:

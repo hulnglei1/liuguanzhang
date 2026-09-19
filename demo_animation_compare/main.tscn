@@ -1,0 +1,289 @@
+[gd_scene format=3 load_steps=6 set_id=1]
+
+[ext_resource type="Script" path="res://main.gd" id="1_main"]
+[ext_resource type="Shader" path="res://shader_breathing.gdshader" id="2_shader"]
+[ext_resource type="Texture2D" path="res://assets/s1_idle.png" id="3_idle"]
+[ext_resource type="Texture2D" path="res://assets/s1_vfx_dragon.png" id="4_vfx"]
+[ext_resource type="Texture2D" path="res://assets/enemy_dummy.png" id="5_dummy"]
+[ext_resource type="Texture2D" path="res://assets/s2_body.png" id="6_body"]
+[ext_resource type="Texture2D" path="res://assets/s2_arm_blade.png" id="7_arm"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_breathing"]
+shader = ExtResource("2_shader")
+shader_parameter/speed = 3.0
+shader_parameter/amplitude = 3.5
+shader_parameter/is_active = true
+
+[node name="Main" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_main")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.09, 0.11, 1)
+
+[node name="Divider" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 13
+anchor_left = 0.5
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -2.0
+offset_right = 2.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.25, 0.28, 0.35, 1)
+
+[node name="Arena" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="LeftPanel" type="Control" parent="Arena"]
+layout_mode = 1
+anchor_right = 0.5
+anchor_bottom = 0.8
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="Arena/LeftPanel"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -280.0
+offset_top = 25.0
+offset_right = 280.0
+offset_bottom = 60.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(0.3, 0.9, 0.5, 1)
+theme_override_font_sizes/font_size = 22
+text = "方案 1：战棋黄金法则（整图刚体+Tween冲砍+独立特效）"
+horizontal_alignment = 1
+
+[node name="SubTitle" type="Label" parent="Arena/LeftPanel"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -250.0
+offset_top = 65.0
+offset_right = 250.0
+offset_bottom = 90.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(0.7, 0.75, 0.8, 1)
+theme_override_font_sizes/font_size = 14
+text = "代表作：《火焰之纹章》《三国志曹操传》《暗黑地牢》"
+horizontal_alignment = 1
+
+[node name="TileGround" type="ColorRect" parent="Arena/LeftPanel"]
+layout_mode = 0
+offset_left = 80.0
+offset_top = 440.0
+offset_right = 560.0
+offset_bottom = 444.0
+color = Color(0.3, 0.5, 0.4, 0.8)
+
+[node name="GuanYu_S1" type="Sprite2D" parent="Arena/LeftPanel"]
+material = SubResource("ShaderMaterial_breathing")
+position = Vector2(200, 320)
+texture = ExtResource("3_idle")
+
+[node name="Dummy_S1" type="Sprite2D" parent="Arena/LeftPanel"]
+position = Vector2(440, 380)
+texture = ExtResource("5_dummy")
+
+[node name="VFX_Dragon" type="Sprite2D" parent="Arena/LeftPanel"]
+visible = false
+position = Vector2(440, 340)
+texture = ExtResource("4_vfx")
+
+[node name="StatusLabel" type="Label" parent="Arena/LeftPanel"]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -260.0
+offset_top = -80.0
+offset_right = 260.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_colors/font_color = Color(0.9, 0.9, 0.9, 1)
+theme_override_font_sizes/font_size = 15
+text = "状态：待机呼吸中..."
+horizontal_alignment = 1
+
+[node name="RightPanel" type="Control" parent="Arena"]
+layout_mode = 1
+anchor_left = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.8
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="Arena/RightPanel"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -280.0
+offset_top = 25.0
+offset_right = 280.0
+offset_bottom = 60.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(0.9, 0.7, 0.3, 1)
+theme_override_font_sizes/font_size = 22
+text = "方案 2：2D 骨骼关节驱动（Spine / Skeleton2D 模式）"
+horizontal_alignment = 1
+
+[node name="SubTitle" type="Label" parent="Arena/RightPanel"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -250.0
+offset_top = 65.0
+offset_right = 250.0
+offset_bottom = 90.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(0.7, 0.75, 0.8, 1)
+theme_override_font_sizes/font_size = 14
+text = "代表作：《崩坏学园2》《香草社十三机兵》《主流二次元商业手游》"
+horizontal_alignment = 1
+
+[node name="TileGround" type="ColorRect" parent="Arena/RightPanel"]
+layout_mode = 0
+offset_left = 80.0
+offset_top = 440.0
+offset_right = 560.0
+offset_bottom = 444.0
+color = Color(0.5, 0.4, 0.3, 0.8)
+
+[node name="GuanYu_S2" type="Node2D" parent="Arena/RightPanel"]
+position = Vector2(200, 320)
+
+[node name="Body" type="Sprite2D" parent="Arena/RightPanel/GuanYu_S2"]
+scale = Vector2(0.42, 0.42)
+texture = ExtResource("6_body")
+
+[node name="Shoulder" type="Node2D" parent="Arena/RightPanel/GuanYu_S2"]
+position = Vector2(-25, -45)
+
+[node name="ArmBlade" type="Sprite2D" parent="Arena/RightPanel/GuanYu_S2/Shoulder"]
+position = Vector2(25, 45)
+scale = Vector2(0.42, 0.42)
+texture = ExtResource("7_arm")
+
+[node name="Dummy_S2" type="Sprite2D" parent="Arena/RightPanel"]
+position = Vector2(440, 380)
+texture = ExtResource("5_dummy")
+
+[node name="StatusLabel" type="Label" parent="Arena/RightPanel"]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -260.0
+offset_top = -80.0
+offset_right = 260.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_colors/font_color = Color(0.9, 0.9, 0.9, 1)
+theme_override_font_sizes/font_size = 15
+text = "状态：待机中..."
+horizontal_alignment = 1
+
+[node name="UI" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -140.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="Bg" type="ColorRect" parent="UI"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.04, 0.05, 0.07, 0.95)
+
+[node name="ModeLabel" type="Label" parent="UI"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -350.0
+offset_top = 10.0
+offset_right = 350.0
+offset_bottom = 40.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_font_sizes/font_size = 18
+text = "【当前对比状态：待机呼吸对比】"
+horizontal_alignment = 1
+
+[node name="HBox" type="HBoxContainer" parent="UI"]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -480.0
+offset_top = -80.0
+offset_right = 480.0
+offset_bottom = -25.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/separation = 25
+alignment = 1
+
+[node name="BtnIdle" type="Button" parent="UI/HBox"]
+custom_minimum_size = Vector2(200, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "1. 待机呼吸对比"
+
+[node name="BtnNormalAtk" type="Button" parent="UI/HBox"]
+custom_minimum_size = Vector2(200, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "2. 普通攻击对比 (平砍)"
+
+[node name="BtnUltimateAtk" type="Button" parent="UI/HBox"]
+custom_minimum_size = Vector2(200, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "3. 特效大招对比 (青龙斩)"
+
+[node name="BtnAuto" type="Button" parent="UI/HBox"]
+custom_minimum_size = Vector2(200, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+toggle_mode = true
+button_pressed = true
+text = "4. 自动循环演示 [开]"
