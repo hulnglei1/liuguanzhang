@@ -1637,17 +1637,11 @@ func _has_attackable_target(u) -> bool:
 
 func _has_skill_target(u, skill_id: String) -> bool:
 	if skill_id == "dragon_slash":
-		# ① 沿上下左右直线、距离不超过当前蓄力贯穿格数的敌人（蓄得越久打得越远）
-		var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
-		var reach: int = maxi(1, int(dt.get("line_len", 1)))
+		# ① 上下左右相邻有敌人（贴身出刀；刀芒再沿直线贯穿其身后）
 		for d in GridCore.DIRS4:
-			for k in range(1, reach + 1):
-				var c: Vector2i = u.cell + d * k
-				if c.x < 0 or c.y < 0 or c.x >= MAP_W or c.y >= MAP_H:
-					break
-				var enemy := _unit_at(c)
-				if enemy and enemy.alive and enemy.camp != u.camp:
-					return true
+			var enemy := _unit_at(u.cell + d)
+			if enemy and enemy.alive and enemy.camp != u.camp:
+				return true
 		# ② 直线上有未破的城门（第 1 关「劈关夺门」）
 		#    少了这一条，华雄一死、周围没敌人时，关羽的技能按钮会一直灰着 ——
 		#    玩家明明蓄满了 10 格却点不动，整个阶段 2 无法完成。
@@ -1713,17 +1707,15 @@ func _cmd_skill() -> void:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
 	if u and "dragon_slash" in u.skill_ids:
 		var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
-		var reach: int = maxi(1, int(dt.get("line_len", 1)))
-		info_label.text = "【千里青龙斩】点直线上任意敌军：刀芒贯穿目标及身后共 %d 格！蓄力越多打得越远（也可对准同一直线上的城门劈门）" % reach
+		var pierce: int = int(dt.get("line_len", 1))
+		info_label.text = "【千里青龙斩】点自己**上下左右相邻**的敌军出刀：刀芒命中后沿该方向贯穿其身后（共 %d 格，蓄力越多贯穿越长）。也可对准同一直线上的城门劈门。" % pierce
 		var valid_cells: Array[Vector2i] = []
+		# 出刀范围：只有贴身 4 向
 		for d in GridCore.DIRS4:
-			for k in range(1, reach + 1):
-				var c: Vector2i = u.cell + d * k
-				if c.x < 0 or c.y < 0 or c.x >= MAP_W or c.y >= MAP_H:
-					break
-				var enemy := _unit_at(c)
-				if enemy and enemy.alive and enemy.camp != u.camp:
-					valid_cells.append(c)
+			var c: Vector2i = u.cell + d
+			var enemy := _unit_at(c)
+			if enemy and enemy.alive and enemy.camp != u.camp:
+				valid_cells.append(c)
 		# 城门格也一起高亮：阶段 2 玩家一眼就知道能劈哪里
 		if not gate_broken and chapter.has("map"):
 			for o in chapter["map"].get("obstacles", []):
@@ -1958,17 +1950,10 @@ func _is_in_skill_range(cell: Vector2i) -> bool:
 		return false
 	match skill_id:
 		"dragon_slash":
-			# 刀芒沿上下左右直线贯穿：**蓄力越多打得越远**（与"劈城门"共用同一套判定）
-			# 之前只允许紧贴相邻 1 格 —— 玩家辛苦蓄满 10 格却够不着远处的敌人，
-			# 自然觉得"技能根本用不了"（玩家实测反馈）。
-			var diff := cell - u.cell
-			if diff == Vector2i.ZERO:
-				return false
-			if diff.x != 0 and diff.y != 0:
-				return false                      # 必须在同一行或同一列
-			var dist: int = absi(diff.x) + absi(diff.y)
-			var dt: Dictionary = CombatCore.dragon_charge_tier(u.charge)
-			return dist <= int(dt.get("line_len", 1))
+			# 关羽必须**贴身出刀**：只能打自己上下左右相邻的敌人（斜角不算）。
+			# 刀芒命中后，再沿该方向贯穿目标**身后的同一条直线**（长度随蓄力增长）。
+			# 所以："能打的范围"是相邻格，"能伤害的范围"是一条线。
+			return (cell - u.cell) in GridCore.DIRS4
 		"roar":
 			var roar_r := 2
 			var save := SaveCore.load_state()

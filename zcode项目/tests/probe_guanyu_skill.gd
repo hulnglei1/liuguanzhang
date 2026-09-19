@@ -100,6 +100,33 @@ func _run() -> void:
 			_check(dao.hp < hp0, "点相邻敌军 → 青龙斩真的打出去了")
 			_check(bool(gy.acted), "出手后关羽标记已行动")
 
+	# ---------- 场景 4：刀芒贯穿身后同线敌人 ----------
+	print("\n---- 4. 刀芒贯穿身后同线敌人 ----")
+	_clear_dialog()
+	var d1 = b._unit_by_id("dao_bing_1")
+	var d2 = b._unit_by_id("dao_bing_2")
+	d1.alive = true
+	d1.hp = d1.max_hp
+	d1.cell = Vector2i(5, 4)
+	d2.alive = true
+	d2.hp = d2.max_hp
+	d2.cell = Vector2i(6, 4)                   # 正好在 d1 身后的同一行
+	b._sync_text(d1)
+	b._sync_text(d2)
+	gy.cell = Vector2i(4, 4)                   # 与 d1 相邻（贴身出刀）
+	gy.charge = 4
+	gy.acted = false
+	gy.cds.clear()
+	var hp1: int = d1.hp
+	var hp2: int = d2.hp
+	b.selected_id = "guanyu"
+	b._do_skill(d1.cell)
+	await _wait(0.8)
+	print("  刀兵A %d→%d（贴身主目标）｜刀兵B %d→%d（身后同线）" % [
+		hp1, d1.hp, hp2, d2.hp])
+	_check(d1.hp < hp1, "贴身命中的主目标受伤")
+	_check(d2.hp < hp2, "刀芒**贯穿身后同一直线**的敌人（关羽技能的核心手感）")
+
 	# ---------- 场景 2：斩华雄后劈城门 ----------
 	print("\n---- 2. 斩华雄 → 劈城门（应为可用）----")
 	_clear_dialog()

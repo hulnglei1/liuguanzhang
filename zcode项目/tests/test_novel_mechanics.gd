@@ -15,25 +15,25 @@ func _init() -> void:
 
 	# 1. 验证四阶青龙进化及贯穿距离 line_len
 	var t1 = CombatCore.dragon_charge_tier(2)
-	if t1.tier != 1 or t1.line_len != 1:
-		printerr("[FAIL] 2层蓄力应为初阶(line_len=1)，实际: ", t1)
+	if t1.tier != 1 or t1.line_len != 2:
+		printerr("[FAIL] 2层蓄力应为初阶(line_len=2)，实际: ", t1)
 		failed += 1
 	else:
-		print("  ✅ [PASS] 2层蓄力：初阶 · 青龙微芒初现 (贯穿1格)")
+		print("  ✅ [PASS] 2层蓄力：初阶 · 青龙微芒初现 (贯穿2格)")
 
 	var t2 = CombatCore.dragon_charge_tier(5)
-	if t2.tier != 2 or t2.line_len != 2:
-		printerr("[FAIL] 5层蓄力应为中阶(line_len=2)，实际: ", t2)
+	if t2.tier != 2 or t2.line_len != 3:
+		printerr("[FAIL] 5层蓄力应为中阶(line_len=3)，实际: ", t2)
 		failed += 1
 	else:
-		print("  ✅ [PASS] 5层蓄力：中阶 · 青龙腾云逐日 (贯穿2格)")
+		print("  ✅ [PASS] 5层蓄力：中阶 · 青龙腾云逐日 (贯穿3格)")
 
 	var t3 = CombatCore.dragon_charge_tier(8)
-	if t3.tier != 3 or t3.line_len != 4:
-		printerr("[FAIL] 8层蓄力应为高阶(line_len=4)，实际: ", t3)
+	if t3.tier != 3 or t3.line_len != 5:
+		printerr("[FAIL] 8层蓄力应为高阶(line_len=5)，实际: ", t3)
 		failed += 1
 	else:
-		print("  ✅ [PASS] 8层蓄力：高阶 · 百丈怒龙冲霄 (贯穿4格)")
+		print("  ✅ [PASS] 8层蓄力：高阶 · 百丈怒龙冲霄 (贯穿5格)")
 
 	var t4 = CombatCore.dragon_charge_tier(10)
 	if t4.tier != 4 or t4.line_len != 12 or not t4.can_shatter_gate:
