@@ -90,6 +90,7 @@ var victory := false
 var gate_broken := false
 var stages: Array = []           # 曹操传式分阶段军令（数据来自 chapter["stages"]）
 var stage_idx: int = 0           # 当前阶段下标
+var pending_end_turn := false    # 空格结束回合的二次确认（防止没行动就被跳过）
 var obstacle_nodes: Dictionary = {}
 var active_arrows: Array = []          # 战场中正在飞行的回旋飞弹
 var arrow_nodes: Dictionary = {}       # arrow_id -> Node2D（飞弹视觉节点）
@@ -818,7 +819,10 @@ func _update_dashboard() -> void:
 func _configure_display() -> void:
 	# 窗口/相机对齐
 	Engine.max_fps = 60
-	get_window().size = Vector2i(1280, 720)
+	# ⚠ 只在「窗口模式且尺寸不符」时纠正；玩家全屏时强行改 size 会把画面挤到左下角
+	var w := get_window()
+	if w.mode == Window.MODE_WINDOWED and w.size != Vector2i(1280, 720):
+		w.size = Vector2i(1280, 720)
 
 func _load_chapter() -> void:
 	var ch_file: String = "res://data/chapters/%s.json" % chapter_id
@@ -1166,7 +1170,15 @@ func _input(event: InputEvent) -> void:
 				return
 		return
 
-	# 3. 正常战棋交互阶段：
+	# 3. 空格 = 结束我方回合（对白/喊字阶段已在上方拦截）
+	#    有未行动单位时先警告，再按一次才确认 —— 避免"没行动就被跳过"
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
+		if input_mode == InputMode.NONE and not dialog_showing:
+			_try_end_turn_by_space()
+			get_viewport().set_input_as_handled()
+			return
+
+	# 4. 正常战棋交互阶段：
 	if event is InputEventMouseButton and event.pressed:
 		# 右键：快速取消选择/返回自由视角
 		if event.button_index == MOUSE_BUTTON_RIGHT:
@@ -1272,6 +1284,7 @@ func _unit_at(cell: Vector2i) -> BattleUnitScript:
 ## 选中单位：高亮移动格 + 显示命令菜单
 func _select_unit(id: String) -> void:
 	selected_id = id
+	pending_end_turn = false   # 玩家一旦开始操作，取消"结束回合"的待确认状态
 	var u: BattleUnitScript = _unit_by_id(id)
 	if u == null or not u.alive:
 		_cancel_input()
@@ -1611,6 +1624,9 @@ func _has_skill_target(u, skill_id: String) -> bool:
 		return false
 	elif skill_id == "naked_armor":
 		return true
+	elif skill_id == "roar":
+		# 群控不挑目标：只要自己还活着、技能不在 CD 就能喊
+		return true
 	for t in units:
 		if t.alive and t.camp != u.camp:
 			return true
@@ -1640,6 +1656,13 @@ func _cmd_attack() -> void:
 			info_label.text = "【步兵八向】点击周围红框敌军发起攻击（可斜向挥砍）"
 
 func _cmd_skill() -> void:
+	var u0: BattleUnitScript = _unit_by_id(selected_id)
+	# 燕人咆哮是全场群控（原著「群控，敌我不分」）——不需要点目标，点技能直接开喊
+	if u0 and "roar" in u0.skill_ids:
+		command_menu.visible = false
+		_clear_overlay()
+		_start_roar_charging(u0)
+		return
 	input_mode = InputMode.SKILL
 	command_menu.visible = false
 	_clear_overlay()
@@ -2577,6 +2600,7 @@ func _after_action(u) -> void:
 	for uu in _camp_units("player"):
 		alive_ids.append(uu.id)
 	if TurnCore.all_acted(turn_state, alive_ids):
+		_spawn_banner("✅ 我方全员行动完毕 → 敌方回合", Color(0.6, 0.85, 1.0))
 		_end_player_turn()
 	else:
 		# 提示还有谁可行动
@@ -2589,10 +2613,28 @@ func _after_action(u) -> void:
 		_update_hud()
 
 func _end_player_turn() -> void:
+	pending_end_turn = false
 	TurnCore.to_enemy(turn_state)
 	info_label.text = "敌方回合…"
 	_update_hud()
 	_run_enemy_turn()
+
+## 空格结束回合：有未行动单位时先警告，再按一次确认
+func _try_end_turn_by_space() -> void:
+	if victory or win_dialog_played:
+		return
+	var pending: Array[String] = []
+	for uu in _camp_units("player"):
+		if not uu.acted:
+			pending.append(uu.name)
+	if pending.size() > 0 and not pending_end_turn:
+		pending_end_turn = true
+		var names := ", ".join(pending)
+		_spawn_banner("⚠ 还有 %d 人未行动：%s" % [pending.size(), names], Color(1.0, 0.8, 0.3))
+		info_label.text = "还有 %d 人未行动（%s）。\n确认要结束回合，请【再按一次空格】，或点右下角【结束回合】" % [pending.size(), names]
+		return
+	pending_end_turn = false
+	_end_player_turn()
 
 ## 敌方回合：每个存活敌人执行简单 AI（带演出节奏）
 func _run_enemy_turn() -> void:

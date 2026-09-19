@@ -108,14 +108,20 @@ func _test_chapter1_combat_and_gate() -> void:
 	_assert(huaxiong.stun_turns > 0, "张飞战吼成功眩晕华雄")
 	_assert(zhangfei.cds.get("roar", 0) == 3, "战吼释放后进入 3 回合 CD")
 	
-	# 3. 关羽千里逃跑蓄力：跑满 10 格，一击斩杀华雄并崩塌身后汜水关门
+	# 3. 关羽千里逃跑蓄力：跑满 10 格，一击斩杀华雄
+	#    语义修正（2026-09-19）：破门不再由"打主将附带"，必须由玩家把青龙斩对准城门格
+	#    （见 battle.gd 的劈门分支 + tests/test_e2e_win.gd 的两阶段验证）
 	guanyu.charge = 10
 	var slash_evs: Array = SkillsCore.do_dragon_slash(guanyu, huaxiong)
 	var gate_shattered := false
+	var has_full_fx := false
 	for ev in slash_evs:
 		if ev.get("shatter_gate", false):
 			gate_shattered = true
-	_assert(gate_shattered, "关羽满蓄力龙斩触发全屏神威并崩塌华雄身后汜水关城门")
+		if str(ev.get("fx", "")) == "dragon_full_screen":
+			has_full_fx = true
+	_assert(has_full_fx, "满蓄力龙斩触发全屏神威演出")
+	_assert(not gate_shattered, "龙斩不再顺带破门（破门须对准城门格释放才算）")
 	
 	# 4. 关羽龙斩斩杀小兵，华雄存活，不误触通关机制
 	var huaxiong_boss = BattleUnitScript.from_data(unit_defs["huaxiong"], Vector2i(7, 4))
