@@ -28,60 +28,62 @@ static func has_art(unit_id: String) -> bool:
 	return load_for(unit_id) != null
 
 
-## 加载单位序列帧动画配置（SpriteFrames）
-## 若存在攻击序列帧，构建包含 "idle" 和 "attack" 动作的 SpriteFrames
-## 若无序列帧，返回 null
+## 加载单位序列帧（SpriteFrames）
+## 目录约定：
+##   assets/units/{unit_id}_idle/0.png 1.png …     呼吸/待机循环
+##   assets/units/{unit_id}_attack/0.png 1.png …   攻击（单次播放）
+## 只要有 idle 或 attack 任一序列帧就返回 SpriteFrames；都没有则返回 null（回退静态图/色块）
+## 注意：按索引顺序探测文件，不用 DirAccess 列目录 —— 那样在导出的 pck 包里读不到文件
 static func load_frames_for(unit_id: String) -> SpriteFrames:
 	var key := unit_id.strip_edges()
 	if key.is_empty():
 		return null
-	
-	var attack_dir := DIR + key + "_attack/"
-	var idle_tex := load_for(key)
-	
-	# 检索攻击帧
-	var attack_frames: Array[Texture2D] = []
-	for i in range(16):
-		var candidates := [
-			attack_dir + str(i) + ".png",
-			attack_dir + "%s_attack_sheet_%02d.png" % [key, i],
-			attack_dir + "%s_attack_%d.png" % [key, i],
-			DIR + "%s_attack_%d.png" % [key, i],
-			attack_dir + "%s_attack_%02d.png" % [key, i]
-		]
-		var found_tex: Texture2D = null
-		for p in candidates:
+	var idle_frames := _load_frame_dir(DIR + key + "_idle/")
+	var attack_frames := _load_frame_dir(DIR + key + "_attack/")
+	if idle_frames.is_empty() and attack_frames.is_empty():
+		return null
+	var static_tex := load_for(key)
+
+	var sf := SpriteFrames.new()
+	# 1. 待机（呼吸）循环
+	sf.add_animation("idle")
+	sf.set_animation_speed("idle", 3.0)
+	sf.set_animation_loop("idle", true)
+	if not idle_frames.is_empty():
+		for f in idle_frames:
+			sf.add_frame("idle", f)
+	elif static_tex != null:
+		sf.add_frame("idle", static_tex)
+	else:
+		sf.add_frame("idle", attack_frames[0])
+	# 2. 攻击（单次）
+	sf.add_animation("attack")
+	sf.set_animation_speed("attack", 10.0)
+	sf.set_animation_loop("attack", false)
+	if not attack_frames.is_empty():
+		for f in attack_frames:
+			sf.add_frame("attack", f)
+	else:
+		# 没做攻击帧的单位：attack 用 idle 首帧占位，保证动作名存在，调用方不用判空
+		sf.add_frame("attack", sf.get_frame_texture("idle", 0))
+	return sf
+
+
+## 按索引顺序加载一个目录里的序列帧（0.png / 00.png …），遇到断档即停
+static func _load_frame_dir(dir_path: String, max_frames: int = 24) -> Array[Texture2D]:
+	var out: Array[Texture2D] = []
+	for i in range(max_frames):
+		var found: Texture2D = null
+		for cand in ["%d.png" % i, "%02d.png" % i]:
+			var p: String = dir_path + cand
 			if ResourceLoader.exists(p):
 				var res = load(p)
 				if res is Texture2D:
-					found_tex = res
+					found = res
 					break
-		if found_tex != null:
-			attack_frames.append(found_tex)
-		else:
-			if i > 0 and attack_frames.is_empty():
-				break
-			elif i > 0 and not attack_frames.is_empty():
-				break
-
-	if attack_frames.is_empty():
-		return null
-
-	var sf := SpriteFrames.new()
-	# 1. 待机动作 (idle)
-	sf.add_animation("idle")
-	sf.set_animation_speed("idle", 2.0)
-	sf.set_animation_loop("idle", true)
-	if idle_tex != null:
-		sf.add_frame("idle", idle_tex)
-	else:
-		sf.add_frame("idle", attack_frames[0])
-
-	# 2. 攻击动作 (attack)：9 fps，单次播放
-	sf.add_animation("attack")
-	sf.set_animation_speed("attack", 9.0)
-	sf.set_animation_loop("attack", false)
-	for f in attack_frames:
-		sf.add_frame("attack", f)
-
-	return sf
+		if found == null:
+			if i == 0:
+				continue          # 允许从 1.png 起编号
+			break
+		out.append(found)
+	return out

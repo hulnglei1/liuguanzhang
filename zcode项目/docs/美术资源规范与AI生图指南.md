@@ -205,8 +205,48 @@ pixel art, flat vector, chibi
 | 资源 | 放置目录 | 加载器 | 缺图时行为 |
 |---|---|---|---|
 | 立绘 | `assets/portraits/` | `scripts/ui/portrait_loader.gd` | 自动隐藏，不报错 |
-| 战场单位 | `assets/units/` | `scripts/ui/unit_art.gd` | 回退到色块 + 书法字 |
+| 战场单位（静态） | `assets/units/{id}.png` | `scripts/ui/unit_art.gd` | 回退到色块 + 书法字 |
+| 战场单位（序列帧） | `assets/units/{id}_idle/`、`assets/units/{id}_attack/` | 同上 `load_frames_for()` | 缺哪个用另一个占位；都没有则用静态图 |
 | 地块 | `assets/tiles/` | 待接入 | — |
+
+### 8.1 单位序列帧规范（呼吸 + 攻击）
+
+```
+assets/units/guanyu_idle/0.png     ← 呼吸/待机，循环播放，3 fps
+assets/units/guanyu_idle/1.png
+assets/units/guanyu_idle/2.png
+assets/units/guanyu_idle/3.png
+assets/units/guanyu_attack/0.png   ← 攻击，单次播放，10 fps
+assets/units/guanyu_attack/1.png
+assets/units/guanyu_attack/2.png
+assets/units/guanyu_attack/3.png
+```
+
+| 项 | 要求 |
+|---|---|
+| 画布 | 与静态图一致：**192×192**，脚底贴底、水平居中（三套帧必须严格同尺寸同锚点，否则播放时会「抖」） |
+| 帧数 | **呼吸 2–4 帧**（幅度要小，只是微动）；**攻击 4–6 帧**（起手→挥出→收势） |
+| 编号 | `0.png` 起顺延；**不能断档**（加载器遇空号即停） |
+| 尺寸一致 | 若某帧大小不同，Godot 会按各自尺寸绘制 → 单位"乱跳"。切图时务必统一画布 |
+| 素材来源 | 用 `tools/slice_sheet.py` 从精灵图切；GIF 用下面的一行命令切 |
+| 朝向 | 默认朝右绘制（代码会在攻击时按目标自动 `flip_h`，不用出左右两套） |
+
+**把 GIF 切成序列帧**（本机已验证可用）：
+
+```bash
+python -c "
+from PIL import Image
+import os
+src='动图.gif'; out='assets/units/guanyu_idle'
+os.makedirs(out, exist_ok=True)
+im=Image.open(src)
+for i in range(getattr(im,'n_frames',1)):
+    im.seek(i); im.convert('RGBA').save(os.path.join(out,'%d.png'%i))
+print('切出', im.n_frames, '帧')
+"
+```
+
+> 攻击时的**朝向翻转**和**前冲 14px 回弹**由代码实现，美术只需出朝向一致的动作序列。
 
 - **可以一张一张补**，任何时候游戏都能跑
 - 对话 JSON 可显式指定立绘：`{"speaker":"关羽","text":"…","portrait":"guanyu","emotion":"angry"}`
