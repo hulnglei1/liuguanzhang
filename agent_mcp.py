@@ -14,10 +14,10 @@ if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-GAME_DIR = os.path.join(BASE_DIR, "game")
+GAME_DIR = os.path.join(BASE_DIR, "zcode项目")
 CMD_FILE = os.path.join(GAME_DIR, "agent_cmd.json")
 RESP_FILE = os.path.join(GAME_DIR, "agent_resp.json")
-GODOT_EXE = os.path.join(BASE_DIR, "godot_bin", "Godot_v4.3-stable_win64_console.exe")
+GODOT_EXE = os.path.join(BASE_DIR, ".tools", "godot_extracted", "Godot_v4.7.2-stable_win64_console.exe")
 
 def is_godot_running():
     out = subprocess.run(["powershell", "-Command", "Get-Process -Name Godot* -ErrorAction SilentlyContinue"], capture_output=True, text=True)

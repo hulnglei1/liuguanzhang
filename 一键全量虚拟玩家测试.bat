@@ -2,11 +2,10 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 echo ========================================================
-echo   ¡¾»ê´©Áõ¹ØÕÅ¡¿AI ĞéÄâÍæ¼ÒÈ«Á¿Õæ»úÄ£ÄâÇı¶¯²âÊÔ
-echo   È«Á´Â· 100%% ÎïÀíÊó±ê/¼üÅÌÊÂ¼ş×¢Èë ¡¤ ¶Å¾ø°×ºĞ¼ÙÍ¨¹ı
+echo   ã€é­‚ç©¿åˆ˜å…³å¼ ã€‘ç«¯åˆ°ç«¯æˆ˜æ£‹é€šå…³é“¾è·¯éªŒè¯æµ‹è¯•
 echo ========================================================
 echo.
-.\godot_bin\Godot_v4.3-stable_win64_console.exe --path game -s tests/test_virtual_player.gd
+"%~dp0.tools\godot_extracted\Godot_v4.7.2-stable_win64_console.exe" --headless --path "%~dp0zcodeé¡¹ç›®" -s res://tests/test_e2e_win.gd
 echo.
-echo ²âÊÔÔËĞĞÍê±Ï¡£
+echo æµ‹è¯•è¿è¡Œå®Œæ¯•ã€‚
 pause

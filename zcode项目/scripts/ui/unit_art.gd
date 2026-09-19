@@ -26,3 +26,62 @@ static func load_for(unit_id: String) -> Texture2D:
 
 static func has_art(unit_id: String) -> bool:
 	return load_for(unit_id) != null
+
+
+## 加载单位序列帧动画配置（SpriteFrames）
+## 若存在攻击序列帧，构建包含 "idle" 和 "attack" 动作的 SpriteFrames
+## 若无序列帧，返回 null
+static func load_frames_for(unit_id: String) -> SpriteFrames:
+	var key := unit_id.strip_edges()
+	if key.is_empty():
+		return null
+	
+	var attack_dir := DIR + key + "_attack/"
+	var idle_tex := load_for(key)
+	
+	# 检索攻击帧
+	var attack_frames: Array[Texture2D] = []
+	for i in range(16):
+		var candidates := [
+			attack_dir + str(i) + ".png",
+			attack_dir + "%s_attack_sheet_%02d.png" % [key, i],
+			attack_dir + "%s_attack_%d.png" % [key, i],
+			DIR + "%s_attack_%d.png" % [key, i],
+			attack_dir + "%s_attack_%02d.png" % [key, i]
+		]
+		var found_tex: Texture2D = null
+		for p in candidates:
+			if ResourceLoader.exists(p):
+				var res = load(p)
+				if res is Texture2D:
+					found_tex = res
+					break
+		if found_tex != null:
+			attack_frames.append(found_tex)
+		else:
+			if i > 0 and attack_frames.is_empty():
+				break
+			elif i > 0 and not attack_frames.is_empty():
+				break
+
+	if attack_frames.is_empty():
+		return null
+
+	var sf := SpriteFrames.new()
+	# 1. 待机动作 (idle)
+	sf.add_animation("idle")
+	sf.set_animation_speed("idle", 2.0)
+	sf.set_animation_loop("idle", true)
+	if idle_tex != null:
+		sf.add_frame("idle", idle_tex)
+	else:
+		sf.add_frame("idle", attack_frames[0])
+
+	# 2. 攻击动作 (attack)：9 fps，单次播放
+	sf.add_animation("attack")
+	sf.set_animation_speed("attack", 9.0)
+	sf.set_animation_loop("attack", false)
+	for f in attack_frames:
+		sf.add_frame("attack", f)
+
+	return sf

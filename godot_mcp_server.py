@@ -18,9 +18,8 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-GAME_DIR = os.path.join(BASE_DIR, "game")
-GODOT_EXE = os.path.join(BASE_DIR, "godot_bin", "Godot_v4.3-stable_win64_console.exe")
+GAME_DIR = os.path.join(BASE_DIR, "zcode项目")
+GODOT_EXE = os.path.join(BASE_DIR, ".tools", "godot_extracted", "Godot_v4.7.2-stable_win64_console.exe")
 TCP_HOST = "127.0.0.1"
 TCP_PORT = 9099
 

@@ -2,11 +2,9 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 echo ========================================================
-echo   ¡¾»ê´©Áõ¹ØÕÅ£¬ÖîºîÃÇ±»ÕûÂéÁË¡¿SRPG Õ½ÆåÆô¶¯ÖĞ...
-echo   1280x720 ¿íÆÁÊÓ¿Ú ¡¤ Godot 4.7.2
+echo   ã€é­‚ç©¿åˆ˜å…³å¼ ï¼Œè¯¸ä¾¯ä»¬è¢«æ•´éº»äº†ã€‘SRPG æˆ˜æ£‹å¯åŠ¨ä¸­...
+echo   1280x720 å®½å±è§†å£ Â· Godot 4.7.2
 echo ========================================================
 echo.
-".tools\godot_extracted\Godot_v4.7.2-stable_win64_console.exe" --path "zcodeÏîÄ¿"
-echo.
-echo ÓÎÏ·½ø³ÌÒÑ½áÊø¡£
-pause
+start "" "%~dp0.tools\godot_extracted\Godot_v4.7.2-stable_win64.exe" --path "%~dp0zcodeé¡¹ç›®"
+exit /b 0

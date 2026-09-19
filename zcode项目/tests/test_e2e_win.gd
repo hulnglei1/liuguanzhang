@@ -15,6 +15,11 @@ var failed := 0
 
 func _initialize() -> void:
 	BattleScript.chapter_id = "chapter1"
+	var save := SaveCore.load_state()
+	var chs: Array = save.get("chapters", [])
+	chs.erase("chapter1")
+	save["chapters"] = chs
+	SaveCore.save_state(save)
 	battle = BATTLE.instantiate()
 	root.add_child(battle)
 

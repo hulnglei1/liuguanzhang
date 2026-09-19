@@ -26,6 +26,7 @@ func _initialize() -> void:
 		chs.append("chapter1")
 		save["chapters"] = chs
 	save["prestige"] = maxi(int(save.get("prestige", 0)), 8888)
+	save["prologues_seen"] = ["chapter1", "chapter2", "chapter3", "chapter4"]
 	SaveCore.save_state(save)
 
 	# 启动测试流程
@@ -196,6 +197,7 @@ func _run_all_tests() -> void:
 	if btn_enter_battle:
 		print("  -> 物理鼠标点击出征按钮进入第一关战场...")
 		await click_control(btn_enter_battle, 0.5)
+		await _wait(0.5)
 		_assert(current_scene.scene_file_path == "res://scenes/battle.tscn", "物理点击成功加载战场场景！")
 
 	var battle = current_scene

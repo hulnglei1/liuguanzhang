@@ -134,6 +134,8 @@ func _set_dialog_visible(is_vis: bool) -> void:
 	dialog_showing = is_vis
 	if dialog_box:
 		dialog_box.visible = is_vis
+	if not is_vis and portrait_rect:
+		portrait_rect.visible = false
 	var bp = $UI/BottomPanel
 	if bp:
 		bp.visible = not is_vis
@@ -250,13 +252,16 @@ var portrait_rect: TextureRect
 
 func _setup_portrait_layer() -> void:
 	portrait_rect = TextureRect.new()
+	portrait_rect.name = "DialogPortrait"
 	portrait_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	portrait_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	portrait_rect.position = Vector2(16, 176)
-	portrait_rect.size = Vector2(300, 400)
+	# 立绘置于 UI CanvasLayer 之上，位于对话框上方，绝对不被棋盘遮挡
+	portrait_rect.position = Vector2(40, 110)
+	portrait_rect.size = Vector2(360, 420)
+	portrait_rect.z_index = 80
 	portrait_rect.visible = false
 	portrait_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(portrait_rect)
+	$UI.add_child(portrait_rect)
 
 ## 按当前对话行更新立绘（无图则隐藏，不占位、不报错）
 func _update_dialog_portrait(line: Dictionary) -> void:
@@ -919,9 +924,26 @@ func _make_unit_node(u) -> Node2D:
 	char_lbl.add_theme_color_override("font_color", Color(1, 0.98, 0.92))
 	node.add_child(char_lbl)
 
-	# 4.5 单位贴图（美术资源可后补）：有图则替换色块底盘与书法字，保留阵营边框与血条
+	# 4.5 单位贴图与动画（复用 Godot 原生 AnimatedSprite2D 轮子能力）
+	var art_frames := UnitArtLoaderCore.load_frames_for(u.id)
 	var art := UnitArtLoaderCore.load_for(u.id)
-	if art != null:
+	if art_frames != null:
+		var anim_spr := AnimatedSprite2D.new()
+		anim_spr.name = "ArtAnim"
+		anim_spr.sprite_frames = art_frames
+		anim_spr.animation = "idle"
+		anim_spr.play("idle")
+		anim_spr.centered = true
+		var ref_tex := art if art != null else art_frames.get_frame_texture("idle", 0)
+		var tex_h: float = float(ref_tex.get_height()) if ref_tex != null else 192.0
+		var target_h := TILE * 1.35
+		var s := target_h / maxf(1.0, tex_h)
+		anim_spr.scale = Vector2(s, s)
+		anim_spr.position = Vector2(0, -target_h * 0.5 + 6.0)
+		node.add_child(anim_spr)
+		plate.visible = false
+		char_lbl.visible = false
+	elif art != null:
 		var spr := Sprite2D.new()
 		spr.name = "Art"
 		spr.texture = art
@@ -1751,6 +1773,8 @@ func _do_attack(cell: Vector2i) -> void:
 	var t: BattleUnitScript = _unit_at(cell)
 	_clear_overlay()
 	command_menu.visible = false
+	if u:
+		_play_unit_attack_anim(u.id, cell)
 	var events := SkillsCore.do_attack(u, t)
 	_apply_events(events)
 
@@ -1777,6 +1801,7 @@ func _do_attack(cell: Vector2i) -> void:
 	if t and t.alive and not t.is_stunned():
 		if GridCore.can_attack(t.cell, u.cell, t.is_cavalry(), t.rng):
 			_spawn_float_text(t.cell, "⚡ 阵地反击！", Color(1.0, 0.65, 0.2))
+			_play_unit_attack_anim(t.id, u.cell)
 			var counter_ev := SkillsCore.do_counter_attack(t, u)
 			_apply_events(counter_ev)
 			_unit_bounce(t.id)
@@ -1864,6 +1889,7 @@ func _do_skill(cell: Vector2i) -> void:
 				if pu and pu.alive and pu.camp != u.camp and pu.id != t.id:
 					pierced_targets.append(pu)
 
+			_play_unit_attack_anim(u.id, t.cell if t else cell)
 			_big_moment("🐉 %s · 青龙偃月斩！！" % dt.name)
 			var hit_desc := "💥 直线贯穿！" if pierced_targets.size() > 0 else "💥 龙芒暴斩！"
 			_spawn_float_text(u.cell, hit_desc + dt.title, dt.color, true)
@@ -2389,6 +2415,39 @@ func _unit_bounce(id: String) -> void:
 	var tw := create_tween()
 	tw.tween_property(node, "scale", Vector2(1.25, 0.8), 0.06)
 	tw.tween_property(node, "scale", Vector2(1.0, 1.0), 0.12)
+
+## 播放单位攻击动作动画与冲刺打击感（复用 AnimatedSprite2D 与 Tween 轮子能力）
+func _play_unit_attack_anim(attacker_id: String, target_cell: Vector2i) -> void:
+	var node: Node2D = unit_nodes.get(attacker_id)
+	if node == null:
+		return
+	var from_pos: Vector2 = node.position
+	var target_px: Vector2 = _cell_to_px(target_cell)
+	var dir_x: float = target_px.x - from_pos.x
+	
+	# 1. 翻转朝向：面向攻击目标
+	var anim_spr: AnimatedSprite2D = node.get_node_or_null("ArtAnim")
+	var static_spr: Sprite2D = node.get_node_or_null("Art")
+	
+	if anim_spr != null:
+		if absf(dir_x) > 2.0:
+			anim_spr.flip_h = (dir_x < 0.0)
+		# 播放攻击帧序列，播完复位回 idle
+		if anim_spr.sprite_frames and anim_spr.sprite_frames.has_animation("attack"):
+			anim_spr.play("attack")
+			anim_spr.animation_finished.connect(func():
+				if is_instance_valid(anim_spr):
+					anim_spr.play("idle")
+			, CONNECT_ONE_SHOT)
+	elif static_spr != null:
+		if absf(dir_x) > 2.0:
+			static_spr.flip_h = (dir_x < 0.0)
+
+	# 2. 物理冲刺位移打击感（Tween 前刺 + 回弹）
+	var offset: Vector2 = (target_px - from_pos).normalized() * 14.0
+	var tw := create_tween()
+	tw.tween_property(node, "position", from_pos + offset, 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(node, "position", from_pos, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
 ## 生成在空中定速飞行的回旋飞弹视觉节点
 func _spawn_homing_arrow_node(arr: Dictionary) -> void:
