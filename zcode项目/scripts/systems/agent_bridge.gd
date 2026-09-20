@@ -91,16 +91,18 @@ func _execute_mcp_method(method: String, params: Dictionary) -> Dictionary:
 			
 		"query_node_coord":
 			var q: String = params.get("query", "")
-			return _query_node(q)
+			return _query_node(q, str(params.get("class_filter", "")), str(params.get("path_filter", "")))
 			
 		"click_coord":
 			var x = float(params.get("x", 0))
 			var y = float(params.get("y", 0))
-			await _simulate_click(Vector2(x, y))
+			var btn: int = int(params.get("button", MOUSE_BUTTON_LEFT))
+			await _simulate_click(Vector2(x, y), btn)
 			await _capture_screenshot()
 			return {
 				"status": "ok",
 				"clicked_at": [x, y],
+				"button": btn,
 				"screenshot": ProjectSettings.globalize_path(SCREENSHOT_PATH)
 			}
 			
@@ -147,11 +149,74 @@ func _execute_mcp_method(method: String, params: Dictionary) -> Dictionary:
 				"waited_seconds": secs,
 				"screenshot": ProjectSettings.globalize_path(SCREENSHOT_PATH)
 			}
-			
+
+		"get_battle_state":
+			# 有头模式下驱动"真实玩家操作"所需的最小状态（只读，不改任何战斗状态）
+			return _build_battle_state()
+
 		_:
 			return {"status": "error", "message": "Unknown RPC method: " + method}
 
-func _simulate_click(pos: Vector2) -> void:
+
+## 组装战斗状态的只读快照。
+## 只暴露"玩家眼睛能看到的 + 决定该点哪里所必需的"信息：
+## 单位在哪一格/哪个像素、谁能动、蓄力多少、被晕几回合、军令在第几阶段。
+func _build_battle_state() -> Dictionary:
+	var scene: Node = get_tree().current_scene
+	var out: Dictionary = {
+		"status": "ok",
+		"scene": str(scene.name) if scene != null else "",
+		"viewport": [get_viewport().size.x, get_viewport().size.y],
+	}
+	if scene == null or not ("units" in scene):
+		return out      # 不在战斗场景（主菜单/序章），只回场景名
+
+	out["tile"] = float(scene.TILE)
+	out["map"] = [int(scene.MAP_W), int(scene.MAP_H)]
+	out["grid_offset"] = [float(scene.MAP_OFFSET.x), float(scene.MAP_OFFSET.y)]
+	out["chapter_id"] = str(scene.chapter_id)
+	out["turn"] = int(scene.turn_state.turn)
+	out["stage_idx"] = int(scene.stage_idx)
+	out["stage_count"] = int(scene.stages.size())
+	out["gate_broken"] = bool(scene.gate_broken)
+	out["victory"] = bool(scene.victory)
+	out["defeat"] = bool(scene.defeat)
+	out["dialog_showing"] = bool(scene.dialog_showing)
+	out["input_mode"] = int(scene.input_mode)
+	out["selected_id"] = str(scene.selected_id)
+
+	var us: Array = []
+	for u in scene.units:
+		if not bool(u.alive):
+			continue
+		us.append({
+			"id": str(u.id),
+			"name": str(u.name),
+			"camp": str(u.camp),
+			"cell": [int(u.cell.x), int(u.cell.y)],
+			"hp": int(u.hp),
+			"max_hp": int(u.max_hp),
+			"acted": bool(u.acted),
+			"moved": bool(u.moved_this_turn),
+			"charge": int(u.charge),
+			"stun": int(u.stun_turns),
+			"rng": int(u.rng),
+			"cavalry": bool(u.is_cavalry()),
+			"commander": bool(u.is_commander),
+			"skills": u.skill_ids.duplicate(),
+		})
+	out["units"] = us
+
+	# 敌军下一步会扑谁（复现玩家看到的面板提示）
+	var gates: Array = []
+	if scene.chapter.has("map"):
+		for o in scene.chapter["map"].get("obstacles", []):
+			if bool(o.get("is_gate", false)):
+				gates.append([int(o.get("x", -1)), int(o.get("y", -1))])
+	out["gates"] = gates
+	return out
+
+func _simulate_click(pos: Vector2, button: int = MOUSE_BUTTON_LEFT) -> void:
 	var ev_m = InputEventMouseMotion.new()
 	ev_m.position = pos
 	ev_m.global_position = pos
@@ -161,7 +226,7 @@ func _simulate_click(pos: Vector2) -> void:
 	var ev_down = InputEventMouseButton.new()
 	ev_down.position = pos
 	ev_down.global_position = pos
-	ev_down.button_index = MOUSE_BUTTON_LEFT
+	ev_down.button_index = button
 	ev_down.pressed = true
 	Input.parse_input_event(ev_down)
 	
@@ -171,7 +236,7 @@ func _simulate_click(pos: Vector2) -> void:
 	var ev_up = InputEventMouseButton.new()
 	ev_up.position = pos
 	ev_up.global_position = pos
-	ev_up.button_index = MOUSE_BUTTON_LEFT
+	ev_up.button_index = button
 	ev_up.pressed = false
 	Input.parse_input_event(ev_up)
 	
@@ -251,11 +316,18 @@ func _dump_node_recursive(node: Node, out: Array) -> void:
 	for child in node.get_children():
 		_dump_node_recursive(child, out)
 
-func _query_node(q: String) -> Dictionary:
+## 按文本/路径/名字查找节点。
+## class_filter / path_filter 是可选的收紧条件 —— 仪表盘上的说明文字里也含"待机""✨"，
+## 不加过滤会点到说明文字而不是按钮（自动化踩过这个坑）。
+func _query_node(q: String, class_filter: String = "", path_filter: String = "") -> Dictionary:
 	var list: Array = []
 	_dump_node_recursive(get_tree().root, list)
 	var q_clean = q.replace(" ", "").to_lower()
 	for item in list:
+		if not class_filter.is_empty() and str(item.get("class", "")) != class_filter:
+			continue
+		if not path_filter.is_empty() and not (path_filter in str(item.get("path", ""))):
+			continue
 		var text: String = item.get("text", "")
 		var path: String = item.get("path", "")
 		var name: String = item.get("name", "")
@@ -273,7 +345,7 @@ func _query_node(q: String) -> Dictionary:
 				"center": item.get("center"),
 				"disabled": item.get("disabled", false)
 			}
-	return {"found": false, "query": q}
+	return {"found": false, "query": q, "class_filter": class_filter}
 
 # File IPC Fallback
 func _handle_file_command() -> void:

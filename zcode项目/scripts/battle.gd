@@ -1169,13 +1169,17 @@ func _input(event: InputEvent) -> void:
 
 		# 左键点击棋盘：
 		if event.button_index == MOUSE_BUTTON_LEFT:
-			# 曹操传贴身气泡菜单：若鼠标点击落在命令菜单内，放行给 UI 按钮响应，严禁拦截！
+			# 曹操传贴身气泡菜单：若点击落在命令菜单内，放行给 UI 按钮响应，严禁拦截！
+			# ⚠ 这里**只能看事件自身的坐标**。曾写成
+			#     m_rect.has_point(event.position) or m_rect.has_point(get_global_mouse_position())
+			#   后者是"鼠标物理位置"：只要玩家的鼠标恰好停在菜单那片区域，
+			#   哪怕点的是棋盘另一头，点击也会被整条吞掉 —— 表现为"点了没反应"。
 			if command_menu.visible:
 				var m_rect: Rect2 = command_menu.get_global_rect()
 				for child in command_menu.get_children():
 					if child is Control:
 						m_rect = m_rect.merge(child.get_global_rect())
-				if m_rect.has_point(event.position) or m_rect.has_point(get_global_mouse_position()):
+				if m_rect.has_point(event.position):
 					return
 
 			# 三重坐标判定：优先使用事件原始物理坐标 event.position，回退支持 get_global_mouse_position 与 viewport 坐标
