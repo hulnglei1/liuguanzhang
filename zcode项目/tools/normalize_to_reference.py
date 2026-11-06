@@ -42,12 +42,16 @@ def main():
     ap.add_argument("--crop-bottom", type=int, default=0, help="先裁掉底部若干像素（去水印用）")
     ap.add_argument("--crop-right", type=int, default=0, help="先裁掉右侧若干像素（去水印用）")
     ap.add_argument("--no-rembg", action="store_true")
+    ap.add_argument("--flip", action="store_true",
+                    help="水平翻转。战场单位统一朝右，AI 出反了就用这个，别重新生成")
     ap.add_argument("--policy", choices=["fit", "height"], default="fit",
                     help="fit=宽高取小（立绘用，避免裁到肩膀）；"
                          "height=按高度对齐（战场单位用，保证换人时大小一致）")
     args = ap.parse_args()
 
     src = Image.open(args.src).convert("RGBA")
+    if args.flip:
+        src = src.transpose(Image.FLIP_LEFT_RIGHT)
     if args.crop_bottom or args.crop_right:
         w, h = src.size
         src = src.crop((0, 0, w - args.crop_right, h - args.crop_bottom))
