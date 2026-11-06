@@ -35,6 +35,21 @@ const FX_LAYER_NAME := "UnitFxLayer"
 
 ## ---------- 一、外观构建 ----------
 
+const OUTLINE_SHADER := preload("res://assets/shaders/unit_outline.gdshader")
+
+## 给单位挂"描边光"材质：深色角色在深绿棋盘上会糊掉，靠一圈暖色轮廓把剪影拉出来。
+## 只作用于有贴图的单位，不改任何美术资源。
+static func _apply_outline(canvas: CanvasItem) -> void:
+	if canvas == null:
+		return
+	var mat := ShaderMaterial.new()
+	mat.shader = OUTLINE_SHADER
+	mat.set_shader_parameter("rim_color", Color(1.0, 0.94, 0.78, 1.0))
+	mat.set_shader_parameter("outline_px", 5.0)
+	mat.set_shader_parameter("strength", 0.5)
+	canvas.material = mat
+
+
 ## 给单位节点挂上贴图 / 序列帧动画。
 ## 返回 true = 已用贴图（调用方应隐藏色块底盘与书法字）；false = 无贴图，走色块回退。
 static func build_art(node: Node2D, unit_id: String, tile: float) -> bool:
@@ -58,6 +73,7 @@ static func build_art(node: Node2D, unit_id: String, tile: float) -> bool:
 		var s: float = target_h / maxf(1.0, tex_h)
 		anim_spr.scale = Vector2(s, s)
 		anim_spr.position = Vector2(0, -target_h * 0.5 + ART_Y_OFFSET)
+		_apply_outline(anim_spr)
 		node.add_child(anim_spr)
 		apply_idle_breath(anim_spr)
 		return true
@@ -71,6 +87,7 @@ static func build_art(node: Node2D, unit_id: String, tile: float) -> bool:
 		var s2: float = target_h2 / float(maxi(1, art.get_height()))
 		spr.scale = Vector2(s2, s2)
 		spr.position = Vector2(0, -target_h2 * 0.5 + ART_Y_OFFSET)
+		_apply_outline(spr)
 		node.add_child(spr)
 		apply_idle_breath(spr)
 		return true

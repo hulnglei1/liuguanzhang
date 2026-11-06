@@ -17,6 +17,12 @@ const BondsCore := preload("res://scripts/systems/bonds.gd")
 const PortraitLoaderCore := preload("res://scripts/ui/portrait_loader.gd")
 const UnitViewCore := preload("res://scripts/ui/unit_view.gd")
 const ObjectivesCore := preload("res://scripts/core/objectives.gd")
+const SfxCore := preload("res://scripts/systems/sfx.gd")
+
+## 地块贴图（程序化生成，104×104 四方连续；见 tools/gen_tiles.py）
+const TILE_GRASS_A := preload("res://assets/tiles/grass_a.png")
+const TILE_GRASS_B := preload("res://assets/tiles/grass_b.png")
+const TILE_STONE := preload("res://assets/tiles/stone.png")
 
 const TILE := 52.0          # 格子像素（升级为52以充实画面）
 const MAP_OFFSET := Vector2(24.0, 66.0) # 棋盘左上角偏移
@@ -80,6 +86,7 @@ var dash_gimmick_bar: ProgressBar
 ## ---------- 运行时状态 ----------
 var units: Array = []                 # 所有 BattleUnit
 var unit_nodes: Dictionary = {}       # unit_id -> Node2D（场景中的精灵）
+var sfx_player: AudioStreamPlayer = null   # 战斗音效（预加载 WAV，见 systems/sfx.gd）
 var chapter: Dictionary = {}
 var dialogs: Dictionary = {}
 var hills: Array[Vector2i] = []       # 高地格（臧霸占山为王地形）
@@ -113,6 +120,7 @@ var win_dialog_played := false
 
 func _ready() -> void:
 	_configure_display()
+	_setup_audio()
 	_load_chapter()
 	_apply_ui_styles()
 	_init_dashboard()
@@ -304,22 +312,22 @@ func _draw_grid() -> void:
 		c.queue_free()
 	for y in range(MAP_H):
 		for x in range(MAP_W):
-			var tile_rect := ColorRect.new()
+			var tile_rect := TextureRect.new()
+			tile_rect.texture = TILE_GRASS_A if (x + y) % 2 == 0 else TILE_GRASS_B
+			tile_rect.stretch_mode = TextureRect.STRETCH_SCALE
 			tile_rect.size = Vector2(TILE - 1.0, TILE - 1.0)
 			tile_rect.position = MAP_OFFSET + Vector2(x * TILE + 0.5, y * TILE + 0.5)
-			if (x + y) % 2 == 0:
-				tile_rect.color = Color(0.12, 0.16, 0.11, 0.85)
-			else:
-				tile_rect.color = Color(0.09, 0.13, 0.08, 0.85)
 			tile_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			grid_node.add_child(tile_rect)
 
 func _draw_hills() -> void:
 	for h in hills:
-		var rect := ColorRect.new()
+		var rect := TextureRect.new()
+		rect.texture = TILE_STONE
+		rect.stretch_mode = TextureRect.STRETCH_SCALE
 		rect.size = Vector2(TILE - 2.0, TILE - 2.0)
 		rect.position = MAP_OFFSET + Vector2(h.x * TILE + 1.0, h.y * TILE + 1.0)
-		rect.color = Color(0.48, 0.36, 0.22, 0.75)  # 泰山高地岩石色
+		rect.modulate = Color(1.05, 1.0, 0.92)
 		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		map_root.add_child(rect)
 	if hills.size() > 0:
@@ -827,6 +835,16 @@ func _configure_display() -> void:
 	if w.mode == Window.MODE_WINDOWED and w.size != Vector2i(1280, 720):
 		w.size = Vector2i(1280, 720)
 
+## 战斗音效：一个播放器轮播，够用且省节点
+func _setup_audio() -> void:
+	sfx_player = AudioStreamPlayer.new()
+	sfx_player.name = "SfxPlayer"
+	sfx_player.bus = "Master"
+	add_child(sfx_player)
+
+func _play_sfx(sfx_name: String) -> void:
+	SfxCore.play(sfx_player, sfx_name)
+
 func _load_chapter() -> void:
 	var ch_file: String = "res://data/chapters/%s.json" % chapter_id
 	var dl_file: String = "res://data/dialogs/%s_dialogs.json" % chapter_id
@@ -1295,6 +1313,7 @@ func _select_unit(id: String) -> void:
 		move_gained_charge = 0
 	selected_id = id
 	pending_end_turn = false   # 玩家一旦开始操作，取消"结束回合"的待确认状态
+	_play_sfx("ui_click")
 	var u: BattleUnitScript = _unit_by_id(id)
 	if u == null or not u.alive:
 		_cancel_input()
@@ -1874,6 +1893,7 @@ func _do_attack(cell: Vector2i) -> void:
 	command_menu.visible = false
 	if u:
 		_play_unit_attack_anim(u.id, cell)
+		_play_sfx("attack")
 	var events := SkillsCore.do_attack(u, t)
 	_apply_events(events)
 
@@ -2165,9 +2185,18 @@ func _execute_roar(words: int) -> void:
 
 ## ---------- 事件应用 ----------
 func _apply_events(events: Array) -> void:
+	var played_hit := false          # 一次结算里只响一次命中音，避免连击糊成噪音
 	for ev in events:
 		if ev.get("shatter_gate", false):
 			_break_sishui_gate()
+		var etype := str(ev.get("type", ""))
+		if etype == "skill":
+			_play_sfx("skill")
+		elif etype == "death":
+			_play_sfx("death")
+		elif etype == "damage" and not played_hit:
+			_play_sfx("hit")
+			played_hit = true
 		match ev.get("type"):
 			"damage":
 				var t: BattleUnitScript = _unit_by_id(ev.target)
@@ -2734,6 +2763,7 @@ func _after_action(u) -> void:
 
 func _end_player_turn() -> void:
 	pending_end_turn = false
+	_play_sfx("turn")
 	# 我方单位的"回合流逝"：技能冷却-1、眩晕-1、脱力-1
 	# ⚠ 以前只有敌方单位调用 end_turn()，我方从不调用，后果是：
 	#   * 技能冷却永不递减 → 放一次技能后按钮【永久变灰】（玩家反馈"关羽特技一直用不了"）
@@ -3188,6 +3218,7 @@ func _check_defeat() -> bool:
 		# 关键：必须置位结束标记
 		# 否则我方全灭后回合会一直空转、失败对白被反复播放，玩家只能强退（实测"游戏卡住"）
 		defeat = true
+		_play_sfx("defeat")
 		input_mode = InputMode.NONE
 		selected_id = ""
 		command_menu.visible = false
@@ -3201,6 +3232,7 @@ func _show_win_dialog() -> void:
 	if win_dialog_played:
 		return
 	win_dialog_played = true
+	_play_sfx("victory")
 	_play_dialog(chapter_id + "_win")
 
 ## 结算：占郡 +1000 声望 → 图鉴解锁 → 原著剧情里程碑大礼
