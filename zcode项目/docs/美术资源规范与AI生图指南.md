@@ -269,3 +269,54 @@ print('切出', im.n_frames, '帧')
 三国题材免费素材确实存在（B.B.Bits 三国系列、Niao_K 中式角色包），但**清一色 16×16 像素风**。本项目是 1280×720 下 52px 格子 + 程序化发光特效（青龙、音波圈、震屏、全屏闪光），像素小人塞进去会撕裂成两种画风，而且这些包普遍禁止再分发。
 
 **结论**：地形与人物自产（AI 生图 + 统一风格锚）；**UI 图标与音效用 Kenney（CC0）最划算**，无版权风险。
+
+---
+
+## 九、实际执行约定（2026-11-06 起）
+
+早期规范写的是「立绘 900×1200 / 单位 192×192」。实际落地时，关羽那套资产是
+**512×512 立绘 + 256×256 单位**，并经用户确认以此为标准继续产出。
+为避免返工，后续批次一律按下列口径执行：
+
+| 资产 | 实际尺寸 | 说明 |
+|---|---|---|
+| 武将立绘 | **512×512** PNG，透明底 | 半身胸像；只有 `normal`，情绪表情后补 |
+| 战场单位 | **256×256** PNG，透明底 | Q 版全身，脚底贴底 |
+| 序列帧 | 待机 2-4 帧 / 攻击 4 帧 | 目前只有关羽有；其余先用单图 + 代码动效 |
+
+**原始出图统一保存 1024×1024**（`美术资产处理中心/3_原始出图_raw/batch_YYYYMMDD/`）。
+将来若要改回 900×1200，直接用原始图重新规整即可，**不需要重新生成**。
+
+### 新增工具：`tools/normalize_to_reference.py`
+
+按"标杆资产"（关羽）的包围盒对齐新图，保证换人时不跳大小、不浮脚底：
+
+```bash
+# 战场单位：按高度对齐（披风宽的角色不会被压矮）
+python tools/normalize_to_reference.py \
+  --src 原始出图.png --ref assets/units/guanyu.png \
+  --out assets/units/liubei.png --crop-bottom 70 --crop-right 70 --policy height
+
+# 立绘：宽高取小，避免裁到肩膀
+python tools/normalize_to_reference.py \
+  --src 原始出图.png --ref assets/portraits/guanyu_normal.png \
+  --out assets/portraits/liubei_normal.png --crop-bottom 70 --crop-right 70
+```
+
+- `--crop-bottom/--crop-right`：AI 出图右下角常带水印，先裁掉再规整
+- 内部自动调 `rembg` 抠图；抠完按参考资产的「左右中心 + 底边」落位
+
+### 已产出（2026-11-06）
+
+| 角色 | 立绘 | 战场单位 |
+|---|---|---|
+| 关羽 | ✅（原有） | ✅（原有，含 4 帧待机 / 4 帧攻击） |
+| 刘备 | ✅ `liubei_normal.png` | ✅ `liubei.png` |
+| 张飞 | ✅ `zhangfei_normal.png` | ✅ `zhangfei.png` |
+| 赵云 | ✅ `zhaoyun_normal.png` | ✅ `zhaoyun.png` |
+
+### 待解决的观感问题
+
+深绿袍（刘备/关羽）+ 黑甲（张飞）落在深绿棋盘上，**对比度偏低**。
+方案（代码侧，约 0.2 天）：给有贴图的单位加一圈极淡的描边光/背光轮廓，
+或把棋盘整体提亮 5-8%。不需要改图。

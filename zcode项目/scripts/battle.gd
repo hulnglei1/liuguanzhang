@@ -937,6 +937,16 @@ func _make_unit_node(u) -> Node2D:
 	if used_art:
 		plate.visible = false
 		char_lbl.visible = false
+		# 有立绘时，底盘要收成"脚下踏台"：
+		#   原来是半径 0.40×格子 的实心圆盘，圆心在格子中心，而人物脚底在 +6px，
+		#   于是盘子在脚下多出 15px —— 看起来像"人站在盆里"。压扁 + 贴到脚底即可。
+		rim.scale = Vector2(1.0, 0.38)
+		rim.position = Vector2(0, 9)
+		# 金盘只当"踏台"，不能抢人物的视觉重心：压暗 + 降透明度
+		rim.color = Color(rim.color.r * 0.72, rim.color.g * 0.72, rim.color.b * 0.72, 0.68)
+		shadow.scale = Vector2(1.0, 0.38)
+		shadow.position = Vector2(0, 9)
+		shadow.color = Color(0, 0, 0, 0.34)
 
 	# 5. 头顶悬浮动态血条 (背景 + 填充)
 	var bar_bg := ColorRect.new()

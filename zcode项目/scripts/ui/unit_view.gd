@@ -118,10 +118,13 @@ static func play_attack(node: Node2D, target_px: Vector2) -> void:
 			static_spr.flip_h = dir_x < 0.0
 
 	# 2. 前冲 + 顿挫回弹（战棋打击感的最小可靠实现）
+	#    节奏要让人"看得见"：起手 → 冲到最前 → 停一拍（顿挫）→ 收回。
+	#    之前是 0.09s 冲 / 0.14s 回，总共 0.23 秒，4 帧动画还没看清就打完了。
 	var offset: Vector2 = (target_px - from_pos).normalized() * ATTACK_LUNGE_PX
 	var tw: Tween = node.create_tween()
-	tw.tween_property(node, "position", from_pos + offset, 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(node, "position", from_pos, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(node, "position", from_pos + offset, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(0.07)          # 顿挫：在最前点停一拍，刀锋"咬住"目标
+	tw.tween_property(node, "position", from_pos, 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.finished.connect(func():
 		# 兜底归位：防止 Tween 被打断后单位停在半路（滑步 bug 的常见来源）
 		if is_instance_valid(node):
