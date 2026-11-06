@@ -13,6 +13,15 @@ const TILE_PATHS := [
 	"res://assets/tiles/grass_b.png",
 	"res://assets/tiles/stone.png",
 	"res://assets/tiles/dirt.png",
+	"res://assets/tiles/ground.png",
+	"res://assets/tiles/wall.png",
+	"res://assets/tiles/gate.png",
+]
+
+const BGM_PATHS := [
+	"res://assets/audio/bgm_menu.ogg",
+	"res://assets/audio/bgm_battle.ogg",
+	"res://assets/audio/bgm_win.ogg",
 ]
 
 var failed := 0
@@ -47,11 +56,26 @@ func _run() -> void:
 			continue
 		var tex = load(p)
 		if tex is Texture2D:
-			print("  ✅ %-10s %dx%d" % [p.get_file(), tex.get_width(), tex.get_height()])
-			if tex.get_width() != 104 or tex.get_height() != 104:
+			print("  ✅ %-12s %dx%d" % [p.get_file(), tex.get_width(), tex.get_height()])
+			if p.get_file() != "ground.png" and (tex.get_width() != 104 or tex.get_height() != 104):
 				print("     ⚠ 尺寸不是 104×104")
 		else:
 			print("  ❌ 不是 Texture2D：%s" % p)
+			failed += 1
+
+	# 2.5 BGM
+	print("\n[BGM]")
+	for p in BGM_PATHS:
+		if not ResourceLoader.exists(p):
+			print("  ❌ 缺文件 %s" % p)
+			failed += 1
+			continue
+		var s = load(p)
+		var secs: float = float(s.get_length()) if s is AudioStream else 0.0
+		if secs > 1.0:
+			print("  ✅ %-16s %.1fs" % [p.get_file(), secs])
+		else:
+			print("  ❌ 时长异常 %s（%.2fs）" % [p.get_file(), secs])
 			failed += 1
 
 	# 3. 描边光 shader

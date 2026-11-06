@@ -43,10 +43,128 @@ const CHAPTER_DEFS := [
 
 var save: Dictionary
 var label_status: Label
+var settings_layer: Control = null
+var _audio: Node = null   # /root/AudioDirector（--script 模式下 autoload 不是全局标识符，必须运行时取）
 
 func _ready() -> void:
 	save = SaveCore.load_state()
+	_audio = get_node_or_null("/root/AudioDirector")
 	_build_menu()
+	if _audio != null:
+		_audio.play_bgm("menu")
+	_build_settings_button()
+
+
+## 右下角设置入口（音量 / 全屏）
+func _build_settings_button() -> void:
+	var btn := Button.new()
+	btn.name = "btn_settings"
+	btn.text = "⚙ 设置"
+	btn.position = Vector2(1160, 664)
+	btn.size = Vector2(104, 38)
+	btn.add_theme_font_size_override("font_size", 14)
+	btn.add_theme_stylebox_override("normal", _create_btn_style(Color(0.15, 0.17, 0.23), Color(0.50, 0.55, 0.65)))
+	btn.add_theme_stylebox_override("hover", _create_btn_style(Color(0.24, 0.27, 0.34), Color(0.85, 0.75, 0.40)))
+	btn.add_theme_color_override("font_color", Color(0.85, 0.86, 0.92))
+	btn.pressed.connect(_open_settings)
+	add_child(btn)
+
+
+func _open_settings() -> void:
+	if settings_layer != null and is_instance_valid(settings_layer):
+		return
+	if _audio == null:
+		_audio = get_node_or_null("/root/AudioDirector")
+	if _audio == null:
+		return
+	settings_layer = Control.new()
+	settings_layer.name = "SettingsLayer"
+	settings_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(settings_layer)
+
+	var mask := ColorRect.new()
+	mask.color = Color(0.02, 0.03, 0.05, 0.72)
+	mask.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mask.mouse_filter = Control.MOUSE_FILTER_STOP
+	settings_layer.add_child(mask)
+
+	var panel := PanelContainer.new()
+	panel.position = Vector2(400, 130)
+	panel.custom_minimum_size = Vector2(480, 430)
+	panel.add_theme_stylebox_override("panel",
+		_create_box_style(Color(0.10, 0.12, 0.16), Color(0.85, 0.72, 0.35)))
+	settings_layer.add_child(panel)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 16)
+	vb.custom_minimum_size = Vector2(440, 0)
+	panel.add_child(vb)
+
+	var title := Label.new()
+	title.text = "设 置"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 20)
+	title.add_theme_color_override("font_color", Color(0.95, 0.85, 0.50))
+	vb.add_child(title)
+
+	vb.add_child(_mk_volume_row("主音量", "master"))
+	vb.add_child(_mk_volume_row("音乐", "bgm"))
+	vb.add_child(_mk_volume_row("音效", "sfx"))
+
+	var fs := CheckButton.new()
+	fs.text = "全屏显示"
+	fs.button_pressed = bool(_audio.settings.get("fullscreen", false))
+	fs.add_theme_font_size_override("font_size", 15)
+	fs.add_theme_color_override("font_color", Color(0.85, 0.86, 0.92))
+	fs.toggled.connect(func(on: bool) -> void:
+		_audio.set_fullscreen(on))
+	vb.add_child(fs)
+
+	var close := Button.new()
+	close.text = "关 闭"
+	close.custom_minimum_size = Vector2(140, 40)
+	close.add_theme_stylebox_override("normal", _create_btn_style(Color(0.20, 0.22, 0.28), Color(0.55, 0.58, 0.66)))
+	close.add_theme_stylebox_override("hover", _create_btn_style(Color(0.28, 0.30, 0.38), Color(0.85, 0.75, 0.40)))
+	close.pressed.connect(_close_settings)
+	vb.add_child(close)
+
+
+func _mk_volume_row(label_text: String, kind: String) -> Control:
+	var row := VBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+
+	var head := HBoxContainer.new()
+	var l := Label.new()
+	l.text = label_text
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.add_theme_font_size_override("font_size", 15)
+	l.add_theme_color_override("font_color", Color(0.88, 0.89, 0.94))
+	var val := Label.new()
+	val.text = "%d%%" % int(float(_audio.settings.get(kind, 0.8)) * 100.0)
+	val.add_theme_font_size_override("font_size", 14)
+	val.add_theme_color_override("font_color", Color(0.75, 0.76, 0.82))
+	head.add_child(l)
+	head.add_child(val)
+	row.add_child(head)
+
+	var slider := HSlider.new()
+	slider.min_value = 0.0
+	slider.max_value = 1.0
+	slider.step = 0.01
+	slider.value = float(_audio.settings.get(kind, 0.8))
+	slider.custom_minimum_size = Vector2(0, 24)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.value_changed.connect(func(v: float) -> void:
+		_audio.set_volume(kind, v)
+		val.text = "%d%%" % int(v * 100.0))
+	row.add_child(slider)
+	return row
+
+
+func _close_settings() -> void:
+	if settings_layer != null and is_instance_valid(settings_layer):
+		settings_layer.queue_free()
+		settings_layer = null
 
 func _create_box_style(bg_col: Color, border_col: Color, radius: int = 8, border_w: int = 2) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()

@@ -154,8 +154,54 @@ func _execute_mcp_method(method: String, params: Dictionary) -> Dictionary:
 			# 有头模式下驱动"真实玩家操作"所需的最小状态（只读，不改任何战斗状态）
 			return _build_battle_state()
 
+		"get_audio_state":
+			# 音频自检：当前曲目、总线音量、播放器是否真的在走
+			return _build_audio_state()
+
 		_:
 			return {"status": "error", "message": "Unknown RPC method: " + method}
+
+
+## 音频只读快照：用来验证"音乐真的在放"，而不是加载了空文件
+func _build_audio_state() -> Dictionary:
+	var ad: Node = get_node_or_null("/root/AudioDirector")
+	var out: Dictionary = {"status": "ok"}
+	if ad == null:
+		out["status"] = "error"
+		out["message"] = "AudioDirector 未加载"
+		return out
+
+	var buses: Dictionary = {}
+	for name in ["Master", "BGM", "SFX"]:
+		var idx: int = AudioServer.get_bus_index(name)
+		if idx < 0:
+			buses[name] = {"exists": false}
+		else:
+			buses[name] = {
+				"exists": true,
+				"db": AudioServer.get_bus_volume_db(idx),
+				"mute": AudioServer.is_bus_mute(idx),
+			}
+
+	var playing: Array = []
+	for p in ad._players:
+		playing.append({
+			"playing": bool(p.playing),
+			"db": float(p.volume_db),
+			"pos": float(p.get_playback_position()),
+			"len": float(p.stream.get_length()) if p.stream != null else 0.0,
+		})
+
+	out["track"] = str(ad._current_track)
+	out["buses"] = buses
+	out["players"] = playing
+	out["sfx"] = {
+		"master": float(ad.settings.get("master", 0)),
+		"bgm": float(ad.settings.get("bgm", 0)),
+		"sfx": float(ad.settings.get("sfx", 0)),
+		"fullscreen": bool(ad.settings.get("fullscreen", false)),
+	}
+	return out
 
 
 ## 组装战斗状态的只读快照。
@@ -310,6 +356,11 @@ func _dump_node_recursive(node: Node, out: Array) -> void:
 			out.append(item)
 		elif node is ProgressBar:
 			item["value"] = node.value
+			item["max_value"] = node.max_value
+			out.append(item)
+		elif node is HSlider:
+			item["value"] = node.value
+			item["min_value"] = node.min_value
 			item["max_value"] = node.max_value
 			out.append(item)
 			

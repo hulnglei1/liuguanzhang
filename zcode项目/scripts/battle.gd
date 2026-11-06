@@ -19,10 +19,12 @@ const UnitViewCore := preload("res://scripts/ui/unit_view.gd")
 const ObjectivesCore := preload("res://scripts/core/objectives.gd")
 const SfxCore := preload("res://scripts/systems/sfx.gd")
 
-## 地块贴图（程序化生成，104×104 四方连续；见 tools/gen_tiles.py）
-const TILE_GRASS_A := preload("res://assets/tiles/grass_a.png")
-const TILE_GRASS_B := preload("res://assets/tiles/grass_b.png")
+## 地块贴图（程序化生成；见 tools/gen_ground.py 与 gen_tiles.py）
+## 地面用**一整张连续图**，不按格子铺——按格铺等于每格把图案重置一次，必然出现补丁感。
+const TILE_GROUND := preload("res://assets/tiles/ground.png")
 const TILE_STONE := preload("res://assets/tiles/stone.png")
+const TILE_WALL := preload("res://assets/tiles/wall.png")
+const TILE_GATE := preload("res://assets/tiles/gate.png")
 
 const TILE := 52.0          # 格子像素（升级为52以充实画面）
 const MAP_OFFSET := Vector2(24.0, 66.0) # 棋盘左上角偏移
@@ -310,15 +312,32 @@ func _draw_grid() -> void:
 		return
 	for c in grid_node.get_children():
 		c.queue_free()
-	for y in range(MAP_H):
-		for x in range(MAP_W):
-			var tile_rect := TextureRect.new()
-			tile_rect.texture = TILE_GRASS_A if (x + y) % 2 == 0 else TILE_GRASS_B
-			tile_rect.stretch_mode = TextureRect.STRETCH_SCALE
-			tile_rect.size = Vector2(TILE - 1.0, TILE - 1.0)
-			tile_rect.position = MAP_OFFSET + Vector2(x * TILE + 0.5, y * TILE + 0.5)
-			tile_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			grid_node.add_child(tile_rect)
+
+	# 1. 一整张连续地面（关键：不是按格子铺）
+	var ground := TextureRect.new()
+	ground.name = "Ground"
+	ground.texture = TILE_GROUND
+	ground.stretch_mode = TextureRect.STRETCH_SCALE
+	ground.size = Vector2(MAP_W * TILE, MAP_H * TILE)
+	ground.position = MAP_OFFSET
+	ground.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	grid_node.add_child(ground)
+
+	# 2. 极淡的格线：只帮助判读坐标，不把画面切成一块块
+	for x in range(MAP_W + 1):
+		var vline := ColorRect.new()
+		vline.color = Color(0, 0, 0, 0.075)
+		vline.size = Vector2(1.0, MAP_H * TILE)
+		vline.position = MAP_OFFSET + Vector2(x * TILE, 0)
+		vline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		grid_node.add_child(vline)
+	for y in range(MAP_H + 1):
+		var hline := ColorRect.new()
+		hline.color = Color(0, 0, 0, 0.075)
+		hline.size = Vector2(MAP_W * TILE, 1.0)
+		hline.position = MAP_OFFSET + Vector2(0, y * TILE)
+		hline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		grid_node.add_child(hline)
 
 func _draw_hills() -> void:
 	for h in hills:
@@ -350,26 +369,34 @@ func _draw_obstacles() -> void:
 		obs_node.position = _cell_to_px(pos)
 		obs_node.z_index = 8
 
-		# 底板石板/木纹
-		var rect := ColorRect.new()
-		rect.size = Vector2(TILE - 4.0, TILE - 4.0)
-		rect.position = Vector2(-TILE * 0.5 + 2.0, -TILE * 0.5 + 2.0)
-		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		if is_gate:
-			rect.color = Color(0.45, 0.25, 0.14, 0.95) # 铁木城门色
-		else:
-			rect.color = Color(0.30, 0.32, 0.36, 0.92) # 青石城楼色
-		obs_node.add_child(rect)
+		# 外框：深色描边，让障碍物从连续地面里"立"起来
+		var frame := ColorRect.new()
+		frame.color = Color(0.05, 0.06, 0.08, 0.95)
+		frame.size = Vector2(TILE - 1.0, TILE - 1.0)
+		frame.position = Vector2(-TILE * 0.5 + 0.5, -TILE * 0.5 + 0.5)
+		frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		obs_node.add_child(frame)
 
-		# 边框与文字标识
+		# 贴图：青石寨墙 / 铁木城门
+		var tex_rect := TextureRect.new()
+		tex_rect.texture = TILE_GATE if is_gate else TILE_WALL
+		tex_rect.stretch_mode = TextureRect.STRETCH_SCALE
+		tex_rect.size = Vector2(TILE - 6.0, TILE - 6.0)
+		tex_rect.position = Vector2(-TILE * 0.5 + 3.0, -TILE * 0.5 + 3.0)
+		tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		obs_node.add_child(tex_rect)
+
+		# 文字标识（纯文字，避免 emoji 缺字变成方块）
 		var lbl := Label.new()
-		lbl.text = "🚪关门" if is_gate else "🧱寨墙"
+		lbl.text = "关门" if is_gate else "寨墙"
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		lbl.size = Vector2(TILE, TILE)
 		lbl.position = Vector2(-TILE * 0.5, -TILE * 0.5)
 		lbl.add_theme_font_size_override("font_size", 13 if is_gate else 12)
-		lbl.add_theme_color_override("font_color", Color(1.0, 0.88, 0.45) if is_gate else Color(0.85, 0.85, 0.88))
+		lbl.add_theme_color_override("font_color", Color(1.0, 0.88, 0.45) if is_gate else Color(0.88, 0.90, 0.94))
+		lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.95))
+		lbl.add_theme_constant_override("outline_size", 4)
 		obs_node.add_child(lbl)
 
 		map_root.add_child(obs_node)
@@ -839,8 +866,11 @@ func _configure_display() -> void:
 func _setup_audio() -> void:
 	sfx_player = AudioStreamPlayer.new()
 	sfx_player.name = "SfxPlayer"
-	sfx_player.bus = "Master"
+	sfx_player.bus = "SFX"          # 与 BGM 分开，设置里可分别调
 	add_child(sfx_player)
+	var ad: Node = get_node_or_null("/root/AudioDirector")
+	if ad != null:
+		ad.play_bgm("battle")
 
 func _play_sfx(sfx_name: String) -> void:
 	SfxCore.play(sfx_player, sfx_name)
@@ -3233,6 +3263,9 @@ func _show_win_dialog() -> void:
 		return
 	win_dialog_played = true
 	_play_sfx("victory")
+	var ad2: Node = get_node_or_null("/root/AudioDirector")
+	if ad2 != null:
+		ad2.play_bgm("win", 0.4)
 	_play_dialog(chapter_id + "_win")
 
 ## 结算：占郡 +1000 声望 → 图鉴解锁 → 原著剧情里程碑大礼

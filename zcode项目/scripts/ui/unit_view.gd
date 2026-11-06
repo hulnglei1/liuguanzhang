@@ -42,6 +42,9 @@ const OUTLINE_SHADER := preload("res://assets/shaders/unit_outline.gdshader")
 static func _apply_outline(canvas: CanvasItem) -> void:
 	if canvas == null:
 		return
+	# 无头（Dummy 渲染器）下自定义 shader 会拖住进程退出 → 自动化测试里直接跳过
+	if DisplayServer.get_name() == "headless":
+		return
 	var mat := ShaderMaterial.new()
 	mat.shader = OUTLINE_SHADER
 	mat.set_shader_parameter("rim_color", Color(1.0, 0.94, 0.78, 1.0))
