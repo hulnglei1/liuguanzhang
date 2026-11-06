@@ -1,0 +1,73 @@
+{
+  "version": "2026-11-06",
+  "note": "美术资产全量清单（机器可读）。生成顺序按 priority；unit=战场Q版, portrait=对话立绘",
+  "style_ref": {
+    "unit": "assets/units/guanyu.png",
+    "portrait": "assets/portraits/guanyu_normal.png"
+  },
+  "spec": {
+    "unit": { "size": "256x256", "policy": "height", "facing": "right", "bg": "transparent" },
+    "portrait": { "size": "512x512", "policy": "height", "framing": "bust", "bg": "transparent" }
+  },
+  "assets": [
+    { "id": "huaxiong", "name": "华雄", "kind": "unit", "priority": "P0", "chapters": [1],
+      "desc": "西凉猛将，身长九尺，虎体狼腰，豹头猿臂，满面横肉虬髯，头戴铁盔，红袍配玄铁重甲，手持大刀" },
+    { "id": "huaxiong", "name": "华雄", "kind": "portrait", "priority": "P0", "chapters": [1],
+      "desc": "西凉猛将，虎体狼腰，满面横肉与短虬髯，红袍玄铁重甲，神情倨傲凶狠" },
+
+    { "id": "lubu", "name": "吕布", "kind": "unit", "priority": "P0", "chapters": [2],
+      "desc": "天下无双，器宇轩昂，头戴三叉束发紫金冠，体挂西川红锦百花袍，兽面吞头连环铠，手持方天画戟" },
+    { "id": "lubu", "name": "吕布", "kind": "portrait", "priority": "P0", "chapters": [2],
+      "desc": "天下无双，眉目清秀而凌厉，三叉束发紫金冠，红锦百花袍配兽面连环铠，方天画戟，睥睨众生" },
+
+    { "id": "xuchu", "name": "许褚", "kind": "unit", "priority": "P0", "chapters": [3, 4],
+      "desc": "虎痴，身长八尺腰大十围，容貌雄毅，袒露上身赤膊，仅束铁护腕与腰带，手持大刀" },
+    { "id": "xuchu", "name": "许褚", "kind": "portrait", "priority": "P0", "chapters": [3, 4],
+      "desc": "虎痴，魁梧雄毅，短发无须或短髯，赤膊露出精悍肌肉，铁护腕，怒目" },
+
+    { "id": "zangba", "name": "臧霸", "kind": "unit", "priority": "P0", "chapters": [4],
+      "desc": "泰山群寇之首，粗犷豪强，黑褐皮甲配兽皮披肩，络腮短须，手持长刀" },
+    { "id": "zangba", "name": "臧霸", "kind": "portrait", "priority": "P0", "chapters": [4],
+      "desc": "泰山豪强，粗犷剽悍，黑褐皮甲与兽皮披肩，络腮短须，目光桀骜" },
+
+    { "id": "changxi", "name": "昌豨", "kind": "unit", "priority": "P0", "chapters": [4],
+      "desc": "泰山贼将，瘦削精悍，黄褐破甲，头裹暗红巾，手持长枪" },
+    { "id": "changxi", "name": "昌豨", "kind": "portrait", "priority": "P0", "chapters": [4],
+      "desc": "泰山贼将，瘦削精悍，面相狡黠，黄褐破甲与暗红头巾，手持长枪" },
+
+    { "id": "wuanguo", "name": "武安国", "kind": "unit", "priority": "P0", "chapters": [2],
+      "desc": "北海孔融部将，魁梧壮汉，青灰札甲配深蓝战袍，双手持铁锤，短须" },
+    { "id": "wuanguo", "name": "武安国", "kind": "portrait", "priority": "P0", "chapters": [2],
+      "desc": "北海猛将，魁梧憨勇，青灰札甲与深蓝战袍，短须，双手铁锤，神情刚直" },
+
+    { "id": "gongsunzan", "name": "公孙瓒", "kind": "unit", "priority": "P0", "chapters": [1, 2, 3, 4],
+      "desc": "白马将军，白袍银甲配白马义从白色披风，腰悬弓箭，手持长槊，面容冷峻" },
+    { "id": "gongsunzan", "name": "公孙瓒", "kind": "portrait", "priority": "P0", "chapters": [1, 2, 3, 4],
+      "desc": "白马将军，白袍银甲，白银盔缨，面容冷峻孤傲，手持长槊" },
+
+    { "id": "yi_bing", "name": "义军", "kind": "unit", "priority": "P0", "chapters": [1],
+      "desc": "乡勇义军，粗布短褐配简易皮甲，头裹青巾，手持朴刀，质朴坚毅" },
+
+    { "id": "dao_bing", "name": "董卓刀兵", "kind": "unit", "priority": "P0", "chapters": [1],
+      "desc": "西凉军刀兵，黑褐皮甲配铁盔，手持环首刀，表情凶悍" },
+    { "id": "gong_bing", "name": "董卓弓兵", "kind": "unit", "priority": "P0", "chapters": [1],
+      "desc": "西凉军弓兵，褐布战袍配软甲，头裹黑巾，手持角弓，箭壶在腰" },
+    { "id": "li_bu_fu", "name": "董卓骑兵", "kind": "unit", "priority": "P0", "chapters": [2],
+      "desc": "西凉铁骑，黑铁札甲配红缨盔，手持长枪，腰挎环首刀，凶悍" },
+    { "id": "luan_bing", "name": "黄巾乱兵", "kind": "unit", "priority": "P1", "chapters": [3],
+      "desc": "黄巾流民，头裹黄巾，衣衫褴褛，手持锄头与破刀，面黄肌瘦但狂热" },
+    { "id": "taishan", "name": "泰山贼兵", "kind": "unit", "priority": "P1", "chapters": [4],
+      "desc": "泰山山贼，粗布衣配兽皮，头扎乱巾，手持短斧或朴刀，凶蛮" },
+
+    { "id": "xiliang_cavalry", "name": "西凉铁骑", "kind": "unit", "priority": "P2", "chapters": [],
+      "desc": "西凉精骑，黑铁重甲配红缨，手持长枪，马战精锐（步战姿态）" },
+    { "id": "xiliang_archer", "name": "西凉伏兵弓手", "kind": "unit", "priority": "P2", "chapters": [],
+      "desc": "西凉伏兵弓手，暗褐轻甲，头裹暗巾，手持角弓，阴鸷" },
+    { "id": "caocao", "name": "曹操", "kind": "unit", "priority": "P2", "chapters": [],
+      "desc": "枭雄，细眼长髯，玄黑锦袍配暗金甲，腰悬倚天剑，神情深沉" },
+    { "id": "dianwei", "name": "典韦", "kind": "unit", "priority": "P2", "chapters": [],
+      "desc": "古之恶来，形貌魁梧，虬髯怒目，赤裸上身披铁甲片，双手各持一柄铁戟" },
+    { "id": "xurong", "name": "徐荣", "kind": "unit", "priority": "P2", "chapters": [],
+      "desc": "西凉中郎将，沉稳老练，玄铁甲配暗红披风，手持长刀，短须" }
+  ]
+}
