@@ -123,7 +123,7 @@ func _start_settle() -> void:
 	battle.win_dialog_played = true
 	battle._go_to_result()
 	# 验证结算面板出现 + 背包战利品 + 通关记录
-	if battle.result_panel != null and battle.result_panel.visible:
+	if battle.result_view.panel != null and battle.result_view.panel.visible:
 		print("[OK] 结算面板已弹出 ✅")
 	else:
 		print("[FAIL] 结算面板未弹出")

@@ -21,6 +21,7 @@ const SfxCore := preload("res://scripts/systems/sfx.gd")
 
 ## 地图渲染层（地面/格线/高地/障碍）已抽到 scripts/ui/battle_map.gd
 const BattleMapViewCore := preload("res://scripts/ui/battle_map.gd")
+const EnemyAICore := preload("res://scripts/systems/enemy_ai.gd")
 
 const TILE := 52.0          # 格子像素（升级为52以充实画面）
 const MAP_OFFSET := Vector2(24.0, 66.0) # 棋盘左上角偏移
@@ -49,12 +50,8 @@ static func set_chapter_id(id: String) -> void:
 @onready var right_dashboard: PanelContainer = $UI/RightDashboard
 @onready var command_menu: VBoxContainer = $UI/CommandMenu
 
-## 结算面板（代码构建，节点引用由 _build_result_panel 填充）
-var result_panel: PanelContainer
-var result_title: Label
-var result_body: Label
-var result_next: Button
-var result_home: Button
+## 结算面板（已抽到 scripts/ui/result_panel.gd，这里只持有对象与转发调用）
+var result_view := BattleResultPanel.new()
 
 ## 右侧仪表盘子组件（由 _init_dashboard 填充）
 var dash_overview: VBoxContainer
@@ -2780,8 +2777,8 @@ func _run_enemy_turn() -> void:
 		# 打回琅琊：被击溃的目标不再恋战，往东边（琅琊方向）撤退
 		# 每回合只退 1 格 —— 给玩家一个"追上去补刀"的窗口，而不是一眨眼就跑没
 		if _should_retreat(u):
-			var one_step_east := Vector2i(mini(u.cell.x + 1, MAP_W - 1), u.cell.y)
-			_move_toward(u, one_step_east)
+			var one_step := EnemyAICore.retreat_step(u, MAP_W, MAP_H, _retreat_edge())
+			_move_toward(u, one_step)
 			_spawn_float_text(u.cell, "💨 败走！往琅琊方向退！", Color(1.0, 0.7, 0.3), true)
 			info_label.text += "\n%s 无心恋战，率残部向东边的琅琊郡撤退！" % u.name
 			await get_tree().create_timer(0.3).timeout
@@ -2789,25 +2786,21 @@ func _run_enemy_turn() -> void:
 		# 出手前高亮目标 + 短停顿，让玩家看清
 		_flash_unit(target.id, Color(1, 0.6, 0.2))
 		await get_tree().create_timer(0.12).timeout
-		# 弓兵：保持距离2-3格
-		if u.cls == "弓兵":
-			var dist := GridCore.chebyshev(u.cell, target.cell)
-			if dist > u.rng:
+		# 怎么打由 AI 决策层决定（scripts/systems/enemy_ai.gd），这里只负责执行
+		match EnemyAICore.attack_intent(u, target):
+			"kite_approach":
 				_move_toward(u, target.cell)
 				await get_tree().create_timer(0.1).timeout
 				if GridCore.chebyshev(u.cell, target.cell) <= u.rng:
 					_ai_attack(u, target)
-			elif dist <= 1:
+			"kite_back":
 				_move_away(u, target.cell)
 				await get_tree().create_timer(0.1).timeout
 				if GridCore.chebyshev(u.cell, target.cell) <= u.rng:
 					_ai_attack(u, target)
-			else:
+			"attack":
 				_ai_attack(u, target)
-		else:
-			if GridCore.can_attack(u.cell, target.cell, u.is_cavalry(), u.rng):
-				_ai_attack(u, target)
-			else:
+			_:
 				_move_toward(u, target.cell)
 				await get_tree().create_timer(0.1).timeout
 				if GridCore.can_attack(u.cell, target.cell, u.is_cavalry(), u.rng):
@@ -2826,25 +2819,19 @@ func _run_enemy_turn() -> void:
 ## 当前阶段是"击退到边缘"，且该单位已跌破撤退血线？
 ## 原著第 88 章：刘备的目标不是歼灭臧霸，而是"把他打回泰山东边的琅琊郡"。
 func _should_retreat(u) -> bool:
+	return EnemyAICore.should_retreat(stages, stage_idx, u)
+
+
+## 当前阶段的撤退方向（repel_to_edge 的 edge 字段，默认东）
+func _retreat_edge() -> String:
 	if stages.is_empty():
-		return false
+		return "east"
 	var st: Dictionary = stages[clampi(stage_idx, 0, stages.size() - 1)]
-	var win: Dictionary = st.get("win", {})
-	if str(win.get("type", "")) != "repel_to_edge":
-		return false
-	if str(win.get("target", "")) != u.id:
-		return false
-	var ratio: float = float(win.get("ratio", 0.5))
-	return float(u.hp) / float(maxi(1, u.max_hp)) <= ratio
+	return str(st.get("win", {}).get("edge", "east"))
 
 
 func _pick_enemy_target(u) -> BattleUnitScript:
-	var gy: BattleUnitScript = _unit_by_id("guanyu")
-	if gy != null and gy.alive and gy.charge >= 5:
-		var pull_range: int = 10 if gy.charge >= 10 else 6
-		if GridCore.manhattan(u.cell, gy.cell) <= pull_range:
-			return gy
-	return _nearest_player(u)
+	return EnemyAICore.pick_target(u, _unit_by_id("guanyu"), Callable(self, "_nearest_player"))
 
 func _nearest_player(u) -> BattleUnitScript:
 	var best = null
@@ -3263,99 +3250,14 @@ func _go_to_result() -> void:
 	_show_result_panel(title_text, body, nxt)
 
 func _show_result_panel(title_text: String, body: String, nxt: String) -> void:
-	if result_panel == null:
-		_build_result_panel()
+	if result_view.panel == null:
+		result_view.build($UI, _on_result_next, _on_result_home)
 	var mask := $UI.get_node_or_null("ResultMask")
 	if mask:
 		mask.visible = true
-	result_title.text = title_text
-	result_body.text = body
-	result_next.visible = nxt != ""
-	result_next.disabled = nxt == ""
-	result_next.text = "奔赴下一关 ⚔️" if nxt != "" else "大业告成 🏆"
-	result_panel.visible = true
+	result_view.show(title_text, body, nxt)
 
 ## 用代码构建结算面板（避免 tscn 布局解析问题）
-func _build_result_panel() -> void:
-	var mask := ColorRect.new()
-	mask.name = "ResultMask"
-	mask.visible = false
-	mask.color = Color(0.03, 0.04, 0.06, 0.75)
-	mask.set_anchors_preset(Control.PRESET_FULL_RECT)
-	mask.z_index = 110
-	$UI.add_child(mask)
-
-	var panel := PanelContainer.new()
-	panel.visible = false
-	panel.position = Vector2(340, 140)
-	panel.size = Vector2(600, 420)
-	panel.z_index = 120
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.09, 0.13, 0.98)
-	sb.border_color = Color(0.9, 0.78, 0.35, 1.0)
-	sb.set_border_width_all(3)
-	sb.set_corner_radius_all(14)
-	sb.content_margin_left = 28
-	sb.content_margin_right = 28
-	sb.content_margin_top = 24
-	sb.content_margin_bottom = 24
-	panel.add_theme_stylebox_override("panel", sb)
-	$UI.add_child(panel)
-	result_panel = panel
-
-	var vbox := VBoxContainer.new()
-	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.add_theme_constant_override("separation", 20)
-	panel.add_child(vbox)
-
-	var title := Label.new()
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 28)
-	title.add_theme_color_override("font_color", Color(0.98, 0.85, 0.3))
-	vbox.add_child(title)
-	result_title = title
-
-	var body := Label.new()
-	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.add_theme_font_size_override("font_size", 18)
-	body.add_theme_color_override("font_color", Color(0.9, 0.95, 0.9))
-	vbox.add_child(body)
-	result_body = body
-
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 24)
-	vbox.add_child(row)
-
-	var next := Button.new()
-	next.custom_minimum_size = Vector2(180, 52)
-	next.text = "奔赴下一关 ⚔️"
-	var btn_next_sb := StyleBoxFlat.new()
-	btn_next_sb.bg_color = Color(0.18, 0.45, 0.25)
-	btn_next_sb.border_color = Color(0.35, 0.85, 0.45)
-	btn_next_sb.set_border_width_all(2)
-	btn_next_sb.set_corner_radius_all(8)
-	next.add_theme_stylebox_override("normal", btn_next_sb)
-	next.add_theme_font_size_override("font_size", 16)
-	next.pressed.connect(_on_result_next)
-	row.add_child(next)
-	result_next = next
-
-	var home := Button.new()
-	home.custom_minimum_size = Vector2(160, 52)
-	home.text = "返回主城 🏰"
-	var btn_home_sb := StyleBoxFlat.new()
-	btn_home_sb.bg_color = Color(0.2, 0.22, 0.28)
-	btn_home_sb.border_color = Color(0.5, 0.55, 0.65)
-	btn_home_sb.set_border_width_all(2)
-	btn_home_sb.set_corner_radius_all(8)
-	home.add_theme_stylebox_override("normal", btn_home_sb)
-	home.add_theme_font_size_override("font_size", 16)
-	home.pressed.connect(_on_result_home)
-	row.add_child(home)
-	result_home = home
-
 func _next_chapter() -> String:
 	match chapter_id:
 		"chapter1": return "chapter2"
