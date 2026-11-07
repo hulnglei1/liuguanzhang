@@ -860,171 +860,27 @@ func _spawn_units() -> void:
 	MoraleCore.apply_morale(_camp_units("player"), morale.player)
 	MoraleCore.apply_morale(_camp_units("enemy"), morale.enemy)
 
+## ---------- 视觉层委托（实现已搬到 scripts/ui/unit_view.gd） ----------
+## 这里保留同名薄封装，是为了让 battle.gd 里几十处调用点一行都不用改。
+
 func _make_unit_node(u) -> Node2D:
-	var node := Node2D.new()
-	node.position = _cell_to_px(u.cell)
-	node.z_index = 10
+	return UnitViewCore.build_unit_node(u, _cell_to_px(u.cell), TILE)
 
-	# 1. 底部微阴影
-	var shadow := Polygon2D.new()
-	shadow.name = "Shadow"
-	shadow.polygon = _make_circle_polygon(TILE * 0.42, 14)
-	shadow.position = Vector2(0, 3)
-	shadow.color = Color(0, 0, 0, 0.4)
-	node.add_child(shadow)
-
-	# 2. 外层金属令牌边框（金边我方 / 铜红边敌方）
-	var rim := Polygon2D.new()
-	rim.name = "Rim"
-	rim.polygon = _make_circle_polygon(TILE * 0.40, 16)
-	var rim_color := Color(0.92, 0.78, 0.36) if u.camp == "player" else Color(0.85, 0.35, 0.30)
-	if u.is_commander:
-		rim_color = Color(1.0, 0.88, 0.45)
-	rim.color = rim_color
-	node.add_child(rim)
-
-	# 3. 内核将牌底盘
-	var plate := Polygon2D.new()
-	plate.name = "Plate"
-	plate.polygon = _make_circle_polygon(TILE * 0.34, 16)
-	plate.color = _character_base_color(u)
-	node.add_child(plate)
-
-	# 4. 中心书法粗体大字
-	var char_lbl := Label.new()
-	char_lbl.name = "CharLabel"
-	char_lbl.text = _character_calligraphy(u)
-	char_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	char_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	char_lbl.position = Vector2(-16, -15)
-	char_lbl.size = Vector2(32, 30)
-	char_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	char_lbl.add_theme_font_size_override("font_size", 17)
-	char_lbl.add_theme_color_override("font_color", Color(1, 0.98, 0.92))
-	node.add_child(char_lbl)
-
-	# 4.5 单位贴图与序列帧动画
-	#     实现全部在 scripts/ui/unit_view.gd（视觉层，动画侧维护）——机制侧只管调用
-	var used_art: bool = UnitViewCore.build_art(node, u.id, TILE)
-	if used_art:
-		plate.visible = false
-		char_lbl.visible = false
-		# 有立绘时，底盘要收成"脚下踏台"：
-		#   原来是半径 0.40×格子 的实心圆盘，圆心在格子中心，而人物脚底在 +6px，
-		#   于是盘子在脚下多出 15px —— 看起来像"人站在盆里"。压扁 + 贴到脚底即可。
-		rim.scale = Vector2(1.0, 0.38)
-		rim.position = Vector2(0, 9)
-		# 金盘只当"踏台"，不能抢人物的视觉重心：压暗 + 降透明度
-		rim.color = Color(rim.color.r * 0.72, rim.color.g * 0.72, rim.color.b * 0.72, 0.68)
-		shadow.scale = Vector2(1.0, 0.38)
-		shadow.position = Vector2(0, 9)
-		shadow.color = Color(0, 0, 0, 0.34)
-
-	# 5. 头顶悬浮动态血条 (背景 + 填充)
-	var bar_bg := ColorRect.new()
-	bar_bg.name = "HPBarBg"
-	bar_bg.size = Vector2(36, 5)
-	bar_bg.position = Vector2(-18, -25)
-	bar_bg.color = Color(0.1, 0.1, 0.1, 0.85)
-	bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	node.add_child(bar_bg)
-
-	var bar_fill := ColorRect.new()
-	bar_fill.name = "HPBarFill"
-	bar_fill.size = Vector2(34, 3)
-	bar_fill.position = Vector2(-17, -24)
-	bar_fill.color = Color(0.2, 0.85, 0.35)
-	bar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	node.add_child(bar_fill)
-
-	# 6. 底部名字铭牌
-	var name_lbl := Label.new()
-	name_lbl.name = "NameLabel"
-	name_lbl.text = u.name
-	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_lbl.position = Vector2(-36, 16)
-	name_lbl.size = Vector2(72, 16)
-	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	name_lbl.add_theme_font_size_override("font_size", 10)
-	name_lbl.add_theme_color_override("font_color", Color(0.95, 0.92, 0.85))
-	node.add_child(name_lbl)
-
-	# 7. 状态标签 (💫 / 🐎 / 🔥)
-	var status_lbl := Label.new()
-	status_lbl.name = "StatusLabel"
-	status_lbl.text = ""
-	status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	status_lbl.position = Vector2(-18, -39)
-	status_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	status_lbl.size = Vector2(36, 16)
-	status_lbl.add_theme_font_size_override("font_size", 11)
-	node.add_child(status_lbl)
-
-	node.set_meta("unit_id", u.id)
-	_update_unit_visuals(u, node)
-	return node
-
-func _character_calligraphy(u) -> String:
-	match u.id:
-		"guanyu": return "关"
-		"zhangfei": return "张"
-		"liubei": return "刘"
-		"zhaoyun": return "云"
-		"huaxiong": return "雄"
-		"lubu": return "布"
-		"xuchu": return "褚"
-		"zangba": return "霸"
-		"changxi": return "豨"
-		"wuan_guo": return "国"
-	if u.name.length() > 0:
-		return u.name[0]
-	return "兵"
-
-func _character_base_color(u) -> Color:
-	match u.id:
-		"guanyu": return Color(0.11, 0.40, 0.22)   # 碧绿长须
-		"zhangfei": return Color(0.12, 0.22, 0.48) # 怒雷黑青
-		"liubei": return Color(0.65, 0.18, 0.22)   # 汉室玄赤
-		"zhaoyun": return Color(0.15, 0.48, 0.56)  # 银龙青霜
-		"huaxiong": return Color(0.55, 0.14, 0.14) # 西凉狂血
-		"lubu": return Color(0.40, 0.10, 0.35)     # 鬼神紫煞
-		"xuchu": return Color(0.65, 0.38, 0.12)    # 虎痴赭黄
-		"zangba": return Color(0.38, 0.30, 0.22)   # 泰山磐石
-		"changxi": return Color(0.35, 0.38, 0.25)  # 飞龟草绿
-	return Color(0.18, 0.42, 0.68) if u.camp == "player" else Color(0.68, 0.22, 0.20)
 
 func _update_unit_visuals(u, node: Node2D) -> void:
-	if node == null:
-		return
-	var fill: ColorRect = node.get_node_or_null("HPBarFill")
-	if fill:
-		var pct := clampf(float(u.hp) / float(max(u.max_hp, 1)), 0.0, 1.0)
-		fill.size.x = 34.0 * pct
-		if pct > 0.5:
-			fill.color = Color(0.2, 0.85, 0.35)
-		elif pct > 0.2:
-			fill.color = Color(0.95, 0.75, 0.2)
-		else:
-			fill.color = Color(0.9, 0.25, 0.2)
+	UnitViewCore.update_unit_visuals(u, node)
 
-	var status: Label = node.get_node_or_null("StatusLabel")
-	if status:
-		var s := ""
-		if u.is_stunned():
-			s += "💫"
-		if u.is_mounted():
-			s += "🐎"
-		if u.rage_multiplier > 1.1 or u.hua_rage_turns > 0:
-			s += "🔥"
-		if u.armor_broken:
-			s += "🛡️"
-		status.text = s
 
-	# 未行动 vs 已行动半透明调和
-	if u.camp == "player":
-		node.modulate.a = 0.6 if u.acted else 1.0
-	else:
-		node.modulate.a = 1.0
+func _character_base_color(u) -> Color:
+	return UnitViewCore.character_base_color(u)
+
+
+func _character_calligraphy(u) -> String:
+	return UnitViewCore.character_calligraphy(u)
+
+
+func _make_circle_polygon(radius: float, segments: int = 20) -> PackedVector2Array:
+	return UnitViewCore.circle_polygon(radius, segments)
 
 func _camp_color(camp: String) -> Color:
 	return Color(0.2, 0.6, 0.9) if camp == "player" else Color(0.9, 0.3, 0.2)
@@ -2536,14 +2392,6 @@ func _spawn_shockwave(cell: Vector2i, color: Color) -> void:
 		tw.tween_callback(ring.queue_free)
 
 ## 生成正多边形（近似圆）
-func _make_circle_polygon(radius: float, segments: int = 20) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	for i in range(segments):
-		var a := TAU * float(i) / float(segments)
-		pts.append(Vector2(cos(a), sin(a)) * radius)
-	return pts
-
-## 单位受击弹跳（动作感）
 func _unit_bounce(id: String) -> void:
 	var node: Node2D = unit_nodes.get(id)
 	if node == null:
