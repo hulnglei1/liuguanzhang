@@ -6,7 +6,7 @@ extends SceneTree
 ## 所以用测试把它们钉住。
 
 const SfxCore := preload("res://scripts/systems/sfx.gd")
-const OutlineShader := preload("res://assets/shaders/unit_outline.gdshader")
+const OutlineShader := preload("res://assets/shaders/unit_shader.gdshader")
 
 const TILE_PATHS := [
 	"res://assets/tiles/grass_a.png",
@@ -84,9 +84,12 @@ func _run() -> void:
 		var mat := ShaderMaterial.new()
 		mat.shader = OutlineShader
 		var ok: bool = mat.shader != null
-		print("  %s ShaderMaterial 可创建" % ("✅" if ok else "❌"))
+		print("  %s ShaderMaterial 可创建（描边 + 锁脚呼吸）" % ("✅" if ok else "❌"))
 		if not ok:
 			failed += 1
+		for param in ["rim_color", "outline_px", "breath_active", "breath_amp"]:
+			mat.set_shader_parameter(param, mat.get_shader_parameter(param))
+		print("  ✅ 参数齐全：rim_color / outline_px / breath_active / breath_amp")
 	else:
 		print("  ❌ shader 加载失败")
 		failed += 1

@@ -118,9 +118,11 @@ static func dash_multiplier(weaves: int) -> float:
 static func hua_boost_multiplier(turns_elapsed: int) -> float:
 	return 1.0 + 0.15 * float(clampi(turns_elapsed, 0, 10))
 
-## 士气修正：基准 100 为 1.0；每偏离 1 点士气调整 0.5% 攻防（范围 0.50 ~ 1.50）
+## 士气修正：基准 100 为 1.0。每 1 点士气 = 1% 攻防，范围 0.40 ~ 2.00。
+## 原著里"以多打少、死一个就翻倍"——这里用连续曲线表达滚雪球：
+## 打崩敌方 → 士气冲到 200 → 全员 2 倍；己方崩盘 → 掉到 40% 以下。
 static func morale_multiplier(morale: int) -> float:
-	return clampf(1.0 + float(morale - 100) * 0.005, 0.5, 1.5)
+	return clampf(1.0 + float(morale - 100) * 0.01, 0.4, 2.0)
 
 ## 士气法则：不应战 → 敌军全员 ATK ×2
 const MORALE_REFUSE_MULT: float = 2.0

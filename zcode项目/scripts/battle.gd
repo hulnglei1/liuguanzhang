@@ -19,12 +19,8 @@ const UnitViewCore := preload("res://scripts/ui/unit_view.gd")
 const ObjectivesCore := preload("res://scripts/core/objectives.gd")
 const SfxCore := preload("res://scripts/systems/sfx.gd")
 
-## 地块贴图（程序化生成；见 tools/gen_ground.py 与 gen_tiles.py）
-## 地面用**一整张连续图**，不按格子铺——按格铺等于每格把图案重置一次，必然出现补丁感。
-const TILE_GROUND := preload("res://assets/tiles/ground.png")
-const TILE_STONE := preload("res://assets/tiles/stone.png")
-const TILE_WALL := preload("res://assets/tiles/wall.png")
-const TILE_GATE := preload("res://assets/tiles/gate.png")
+## 地图渲染层（地面/格线/高地/障碍）已抽到 scripts/ui/battle_map.gd
+const BattleMapViewCore := preload("res://scripts/ui/battle_map.gd")
 
 const TILE := 52.0          # 格子像素（升级为52以充实画面）
 const MAP_OFFSET := Vector2(24.0, 66.0) # 棋盘左上角偏移
@@ -310,47 +306,14 @@ func _draw_grid() -> void:
 	var grid_node := map_root.get_node_or_null("GridLines")
 	if grid_node == null:
 		return
-	for c in grid_node.get_children():
-		c.queue_free()
+	BattleMapViewCore.draw_grid(grid_node, MAP_OFFSET, TILE, MAP_W, MAP_H)
 
-	# 1. 一整张连续地面（关键：不是按格子铺）
-	var ground := TextureRect.new()
-	ground.name = "Ground"
-	ground.texture = TILE_GROUND
-	ground.stretch_mode = TextureRect.STRETCH_SCALE
-	ground.size = Vector2(MAP_W * TILE, MAP_H * TILE)
-	ground.position = MAP_OFFSET
-	ground.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	grid_node.add_child(ground)
-
-	# 2. 极淡的格线：只帮助判读坐标，不把画面切成一块块
-	for x in range(MAP_W + 1):
-		var vline := ColorRect.new()
-		vline.color = Color(0, 0, 0, 0.075)
-		vline.size = Vector2(1.0, MAP_H * TILE)
-		vline.position = MAP_OFFSET + Vector2(x * TILE, 0)
-		vline.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		grid_node.add_child(vline)
-	for y in range(MAP_H + 1):
-		var hline := ColorRect.new()
-		hline.color = Color(0, 0, 0, 0.075)
-		hline.size = Vector2(MAP_W * TILE, 1.0)
-		hline.position = MAP_OFFSET + Vector2(0, y * TILE)
-		hline.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		grid_node.add_child(hline)
 
 func _draw_hills() -> void:
-	for h in hills:
-		var rect := TextureRect.new()
-		rect.texture = TILE_STONE
-		rect.stretch_mode = TextureRect.STRETCH_SCALE
-		rect.size = Vector2(TILE - 2.0, TILE - 2.0)
-		rect.position = MAP_OFFSET + Vector2(h.x * TILE + 1.0, h.y * TILE + 1.0)
-		rect.modulate = Color(1.05, 1.0, 0.92)
-		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		map_root.add_child(rect)
+	BattleMapViewCore.draw_hills(map_root, hills, MAP_OFFSET, TILE)
 	if hills.size() > 0:
 		info_label.text += "\n（棕黄色格 = 山地高地，臧霸占山攻防+30%）"
+
 
 ## 绘制地图障碍与要塞城门（古风城堞与铁木大门）
 func _draw_obstacles() -> void:
@@ -360,47 +323,11 @@ func _draw_obstacles() -> void:
 			n.queue_free()
 	obstacle_nodes.clear()
 
-	if not chapter.has("map") or not chapter["map"].has("obstacles"):
+	if not chapter.has("map"):
 		return
-	for o in chapter["map"]["obstacles"]:
-		var pos := Vector2i(int(o.x), int(o.y))
-		var is_gate: bool = bool(o.get("is_gate", false))
-		var obs_node := Node2D.new()
-		obs_node.position = _cell_to_px(pos)
-		obs_node.z_index = 8
+	obstacle_nodes = BattleMapViewCore.draw_obstacles(
+		map_root, chapter["map"].get("obstacles", []), MAP_OFFSET, TILE)
 
-		# 外框：深色描边，让障碍物从连续地面里"立"起来
-		var frame := ColorRect.new()
-		frame.color = Color(0.05, 0.06, 0.08, 0.95)
-		frame.size = Vector2(TILE - 1.0, TILE - 1.0)
-		frame.position = Vector2(-TILE * 0.5 + 0.5, -TILE * 0.5 + 0.5)
-		frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		obs_node.add_child(frame)
-
-		# 贴图：青石寨墙 / 铁木城门
-		var tex_rect := TextureRect.new()
-		tex_rect.texture = TILE_GATE if is_gate else TILE_WALL
-		tex_rect.stretch_mode = TextureRect.STRETCH_SCALE
-		tex_rect.size = Vector2(TILE - 6.0, TILE - 6.0)
-		tex_rect.position = Vector2(-TILE * 0.5 + 3.0, -TILE * 0.5 + 3.0)
-		tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		obs_node.add_child(tex_rect)
-
-		# 文字标识（纯文字，避免 emoji 缺字变成方块）
-		var lbl := Label.new()
-		lbl.text = "关门" if is_gate else "寨墙"
-		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		lbl.size = Vector2(TILE, TILE)
-		lbl.position = Vector2(-TILE * 0.5, -TILE * 0.5)
-		lbl.add_theme_font_size_override("font_size", 13 if is_gate else 12)
-		lbl.add_theme_color_override("font_color", Color(1.0, 0.88, 0.45) if is_gate else Color(0.88, 0.90, 0.94))
-		lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.95))
-		lbl.add_theme_constant_override("outline_size", 4)
-		obs_node.add_child(lbl)
-
-		map_root.add_child(obs_node)
-		obstacle_nodes[pos] = obs_node
 
 func _ready_init_title() -> void:
 	if chapter.has("title"):
@@ -2270,14 +2197,14 @@ func _apply_events(events: Array) -> void:
 						_spawn_burst(t2.cell, Color(0.9, 0.2, 0.2, 0.5), 1)
 					_unit_node_hide(t2.id)
 					info_label.text += "\n%s 阵亡！" % t2.name
-					# 动态士气结算
+					# 动态士气结算（滚雪球：己方每倒一人都在给对面加码）
 					if t2.camp == "enemy":
 						if t2.is_commander:
-							_adjust_morale(20, -30)
+							_adjust_morale(25, -40)
 						else:
-							_adjust_morale(5, -5)
+							_adjust_morale(12, -10)
 					elif t2.camp == "player":
-						_adjust_morale(-15, 10)
+						_adjust_morale(-12, 10)
 					# 吕布暴怒：我方单位倒下，吕布越战越狂（多打少）
 					if t2.camp == "player" and chapter_id == "chapter2":
 						var lubu := _unit_by_id("lubu")
@@ -2737,8 +2664,8 @@ func _break_sishui_gate() -> void:
 
 ## 动态士气调整系统：双方士气（0~150，基准100）
 func _adjust_morale(player_delta: int, enemy_delta: int) -> void:
-	morale.player = clampi(morale.player + player_delta, 0, 150)
-	morale.enemy = clampi(morale.enemy + enemy_delta, 0, 150)
+	morale.player = clampi(morale.player + player_delta, 0, 200)
+	morale.enemy = clampi(morale.enemy + enemy_delta, 0, 200)
 	MoraleCore.apply_morale(_camp_units("player"), morale.player)
 	MoraleCore.apply_morale(_camp_units("enemy"), morale.enemy)
 	_update_hud()
@@ -2850,6 +2777,15 @@ func _run_enemy_turn() -> void:
 			info_label.text += "\n昌豨被吓破了胆，抱头鼠窜往后撤退！"
 			await get_tree().create_timer(0.12).timeout
 			continue
+		# 打回琅琊：被击溃的目标不再恋战，往东边（琅琊方向）撤退
+		# 每回合只退 1 格 —— 给玩家一个"追上去补刀"的窗口，而不是一眨眼就跑没
+		if _should_retreat(u):
+			var one_step_east := Vector2i(mini(u.cell.x + 1, MAP_W - 1), u.cell.y)
+			_move_toward(u, one_step_east)
+			_spawn_float_text(u.cell, "💨 败走！往琅琊方向退！", Color(1.0, 0.7, 0.3), true)
+			info_label.text += "\n%s 无心恋战，率残部向东边的琅琊郡撤退！" % u.name
+			await get_tree().create_timer(0.3).timeout
+			continue
 		# 出手前高亮目标 + 短停顿，让玩家看清
 		_flash_unit(target.id, Color(1, 0.6, 0.2))
 		await get_tree().create_timer(0.12).timeout
@@ -2887,6 +2823,21 @@ func _run_enemy_turn() -> void:
 ##   charge ≥ 5 ：关羽 6 格内的敌军才会被吸引过去
 ## 远处敌人不跨越全图来凑热闹 —— 那样反而假，玩家也不服气
 ## 这就是「嘲讽」：不需要额外的技能按钮，蓄力本身就是最大的挑衅
+## 当前阶段是"击退到边缘"，且该单位已跌破撤退血线？
+## 原著第 88 章：刘备的目标不是歼灭臧霸，而是"把他打回泰山东边的琅琊郡"。
+func _should_retreat(u) -> bool:
+	if stages.is_empty():
+		return false
+	var st: Dictionary = stages[clampi(stage_idx, 0, stages.size() - 1)]
+	var win: Dictionary = st.get("win", {})
+	if str(win.get("type", "")) != "repel_to_edge":
+		return false
+	if str(win.get("target", "")) != u.id:
+		return false
+	var ratio: float = float(win.get("ratio", 0.5))
+	return float(u.hp) / float(maxi(1, u.max_hp)) <= ratio
+
+
 func _pick_enemy_target(u) -> BattleUnitScript:
 	var gy: BattleUnitScript = _unit_by_id("guanyu")
 	if gy != null and gy.alive and gy.charge >= 5:
@@ -3172,7 +3123,8 @@ func _build_objective_ctx() -> Dictionary:
 	for u in units:
 		if u.camp != "enemy":
 			continue
-		snap[u.id] = {"hp": u.hp, "max_hp": u.max_hp, "alive": u.alive, "is_commander": u.is_commander}
+		snap[u.id] = {"hp": u.hp, "max_hp": u.max_hp, "alive": u.alive,
+			"is_commander": u.is_commander, "cell": [u.cell.x, u.cell.y]}
 		if not u.alive:
 			if u.is_commander:
 				commander_down = true
@@ -3185,6 +3137,8 @@ func _build_objective_ctx() -> Dictionary:
 		"enemies_alive": _camp_units("enemy").size(),
 		"minions_alive": minions_alive,
 		"units": snap,
+		"map_w": MAP_W,
+		"map_h": MAP_H,
 	}
 
 ## 分阶段军令：逐阶段判定，全部达成才算通关
@@ -3407,7 +3361,8 @@ func _next_chapter() -> String:
 		"chapter1": return "chapter2"
 		"chapter2": return "chapter3"
 		"chapter3": return "chapter4"
-		"chapter4": return ""
+		"chapter4": return "chapter5"
+		"chapter5": return ""
 	return ""
 
 func _on_result_next() -> void:

@@ -19,13 +19,13 @@ func _init() -> void:
 	var dao = BattleUnitScript.from_data(_unit_def("dao_bing_1"), Vector2i(6, 5))
 
 	# ---- 1. 士气修正 ----
-	MoraleCore.apply_morale([guanyu], 120)  # 士气120 → 1.1
+	MoraleCore.apply_morale([guanyu], 120)  # 士气120 → ×1.2
 	var atk_high: int = guanyu.effective_atk()
-	if atk_high != 33:  # 30×1.1=33
-		print("[FAIL] 士气120 关羽ATK应为33，实际 ", atk_high)
+	if atk_high != 36:  # 30×1.2=36
+		print("[FAIL] 士气120 关羽ATK应为36，实际 ", atk_high)
 		failed += 1
 	else:
-		print("[OK] 士气120 → ATK×1.1 = 33 ✅")
+		print("[OK] 士气120 → ATK×1.2 = 36 ✅")
 
 	# ---- 2. 不应战惩罚：敌军×2 ----
 	MoraleCore.apply_refuse_penalty([huaxiong, dao])

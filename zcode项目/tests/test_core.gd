@@ -119,21 +119,21 @@ func _init() -> void:
 	else:
 		print("[OK] 华雄5回合 = 1.75倍")
 
-	# 13. 士气修正（新版线性：clampf(1.0+(morale-100)*0.005,0.5,1.5)）
-	if abs(CombatCoreScript.morale_multiplier(80) - 0.90) > 0.001:
-		print("[FAIL] 士气80应为0.9")
+	# 13. 士气修正（滚雪球：clampf(1.0+(morale-100)*0.01, 0.4, 2.0)）
+	if abs(CombatCoreScript.morale_multiplier(80) - 0.80) > 0.001:
+		print("[FAIL] 士气80应为0.8")
 		failed += 1
-	if abs(CombatCoreScript.morale_multiplier(20) - 0.60) > 0.001:
-		print("[FAIL] 士气20应为0.6")
+	if abs(CombatCoreScript.morale_multiplier(20) - 0.40) > 0.001:
+		print("[FAIL] 士气20应为0.4（下限）")
 		failed += 1
-	if abs(CombatCoreScript.morale_multiplier(50) - 0.75) > 0.001:
-		print("[FAIL] 士气50应为0.75")
+	if abs(CombatCoreScript.morale_multiplier(50) - 0.50) > 0.001:
+		print("[FAIL] 士气50应为0.5")
 		failed += 1
 	if abs(CombatCoreScript.morale_multiplier(100) - 1.0) > 0.001:
 		print("[FAIL] 士气100应为1.0")
 		failed += 1
 	else:
-		print("[OK] 士气修正（新线性曲线）正确")
+		print("[OK] 士气修正（滚雪球曲线 0.4~2.0）正确")
 
 	# ---- TurnCore 测试 ----
 	# 14. 初始状态

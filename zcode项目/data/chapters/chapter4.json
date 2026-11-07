@@ -82,7 +82,7 @@
     "enemy_spawn": [
         {
             "unit": "zangba",
-            "x": 9,
+            "x": 6,
             "y": 3
         },
         {
@@ -140,11 +140,14 @@
         {
             "id": "repel_zangba",
             "title": "打回琅琊",
-            "objective": "击退泰山扛把子【臧霸】，把他打回泰山东边的琅琊郡！",
+            "objective": "把泰山扛把子【臧霸】打到五成血以下，逼他一路退到地图东侧边缘（琅琊方向）",
             "win": {
-                "type": "defeat_commander"
+                "type": "repel_to_edge",
+                "target": "zangba",
+                "edge": "east",
+                "ratio": 0.5
             },
-            "on_clear": "臧霸退回琅琊"
+            "on_clear": "臧霸退到琅琊郡界，泰山贼全线溃散"
         }
     ]
 }

@@ -8,7 +8,7 @@ extends SceneTree
 const UnitArtCore := preload("res://scripts/ui/unit_art.gd")
 const PortraitCore := preload("res://scripts/ui/portrait_loader.gd")
 
-const CHAPTERS := ["chapter1", "chapter2", "chapter3", "chapter4"]
+const CHAPTERS := ["chapter1", "chapter2", "chapter3", "chapter4", "chapter5"]
 const SPEAKING := ["liubei", "guanyu", "zhangfei", "zhaoyun",
 	"gongsunzan", "wuanguo", "huaxiong", "lubu", "xuchu", "zangba", "changxi"]
 

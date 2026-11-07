@@ -38,6 +38,14 @@ const CHAPTER_DEFS := [
 		"boss": "臧霸",
 		"gimmick": "高地攻防压制 vs 全军强攻",
 		"color": Color(0.7, 0.55, 0.25)
+	},
+	{
+		"id": "chapter5",
+		"title": "第五章 · 洛阳 · 董卓焚城",
+		"subtitle": "董卓焚城西迁，刘皇叔逆火而行救百姓，击退断后的徐荣！",
+		"boss": "徐荣",
+		"gimmick": "坚守护民 + 追击断后",
+		"color": Color(0.85, 0.32, 0.20)
 	}
 ]
 
@@ -282,12 +290,18 @@ func _build_menu() -> void:
 	for ch in cleared_chapters:
 		cleared_set[ch] = true
 
-	var positions := [
-		Vector2(40, 176),
-		Vector2(660, 176),
-		Vector2(40, 426),
-		Vector2(660, 426)
-	]
+	# 卡片布局按章节数自适应：4 关用 2×2，5 关以上用 3 列
+	var cols: int = 2 if CHAPTER_DEFS.size() <= 4 else 3
+	var card_w: float = 580.0 if cols == 2 else 400.0
+	var card_h: float = 230.0 if cols == 2 else 210.0
+	var gap: float = 20.0 if cols == 2 else 18.0
+	var start_x: float = 40.0 if cols == 2 else 22.0
+	var start_y: float = 176.0 if cols == 2 else 168.0
+	var positions: Array[Vector2] = []
+	for i in range(CHAPTER_DEFS.size()):
+		var r: int = i / cols
+		var c: int = i % cols
+		positions.append(Vector2(start_x + c * (card_w + gap), start_y + r * (card_h + gap)))
 
 	for i in range(CHAPTER_DEFS.size()):
 		var def: Dictionary = CHAPTER_DEFS[i]
@@ -296,7 +310,7 @@ func _build_menu() -> void:
 
 		var card := Panel.new()
 		card.position = card_pos
-		card.size = Vector2(580, 230)
+		card.size = Vector2(card_w, card_h)
 		var border_color: Color = def.color if is_cleared else Color(0.83, 0.69, 0.22, 0.6)
 		card.add_theme_stylebox_override("panel", _create_box_style(Color(0.08, 0.09, 0.12, 0.95), border_color, 10, 2))
 		add_child(card)
@@ -307,12 +321,12 @@ func _build_menu() -> void:
 		ch_title.add_theme_font_size_override("font_size", 18)
 		ch_title.add_theme_color_override("font_color", Color(1.0, 0.88, 0.4))
 		ch_title.position = Vector2(18, 14)
-		ch_title.size = Vector2(400, 26)
+		ch_title.size = Vector2(card_w - 150, 26)
 		card.add_child(ch_title)
 
 		# 通关标签
 		var clear_badge := Panel.new()
-		clear_badge.position = Vector2(430, 12)
+		clear_badge.position = Vector2(card_w - 150, 12)
 		clear_badge.size = Vector2(130, 28)
 		var b_style := StyleBoxFlat.new()
 		b_style.bg_color = Color(0.12, 0.3, 0.18, 0.9) if is_cleared else Color(0.2, 0.18, 0.1, 0.8)
@@ -338,7 +352,7 @@ func _build_menu() -> void:
 		ch_desc.add_theme_font_size_override("font_size", 13)
 		ch_desc.add_theme_color_override("font_color", Color(0.8, 0.85, 0.9))
 		ch_desc.position = Vector2(18, 50)
-		ch_desc.size = Vector2(544, 46)
+		ch_desc.size = Vector2(card_w - 36, 46)
 		card.add_child(ch_desc)
 
 		# 战役情报
@@ -347,7 +361,7 @@ func _build_menu() -> void:
 		boss_info.add_theme_font_size_override("font_size", 12)
 		boss_info.add_theme_color_override("font_color", Color(0.6, 0.7, 0.78))
 		boss_info.position = Vector2(18, 108)
-		boss_info.size = Vector2(544, 22)
+		boss_info.size = Vector2(card_w - 36, 22)
 		card.add_child(boss_info)
 
 		# 进军与重战按钮
@@ -364,8 +378,8 @@ func _build_menu() -> void:
 			btn_action.add_theme_stylebox_override("normal", _create_btn_style(btn_bg, btn_border))
 			btn_action.add_theme_stylebox_override("hover", _create_btn_style(btn_bg.lightened(0.2), btn_border.lightened(0.2)))
 			btn_action.add_theme_color_override("font_color", Color(1.0, 0.95, 0.9))
-		btn_action.position = Vector2(18, 148)
-		btn_action.size = Vector2(544, 46)
+		btn_action.position = Vector2(18, card_h - 82)
+		btn_action.size = Vector2(card_w - 36, 46)
 		btn_action.add_theme_font_size_override("font_size", 16)
 		btn_action.name = "btn_" + def.id  # 供自动化演示/测试精确定位
 		btn_action.pressed.connect(_on_chapter.bind(def.id))

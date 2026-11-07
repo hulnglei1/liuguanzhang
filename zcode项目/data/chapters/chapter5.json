@@ -1,0 +1,140 @@
+{
+    "id": "chapter5",
+    "title": "第五关 · 洛阳 · 董卓焚城",
+    "prev_chapter": "chapter4",
+    "map": {
+        "w": 12,
+        "h": 10,
+        "obstacles": [
+            {
+                "x": 3,
+                "y": 2
+            },
+            {
+                "x": 4,
+                "y": 7
+            },
+            {
+                "x": 9,
+                "y": 1
+            }
+        ],
+        "hills": [
+            {
+                "x": 6,
+                "y": 2
+            },
+            {
+                "x": 6,
+                "y": 3
+            },
+            {
+                "x": 7,
+                "y": 3
+            },
+            {
+                "x": 7,
+                "y": 4
+            }
+        ]
+    },
+    "player_spawn": [
+        {
+            "unit": "liubei",
+            "x": 1,
+            "y": 4
+        },
+        {
+            "unit": "guanyu",
+            "x": 2,
+            "y": 5
+        },
+        {
+            "unit": "zhangfei",
+            "x": 1,
+            "y": 6
+        },
+        {
+            "unit": "zhaoyun",
+            "x": 2,
+            "y": 3
+        },
+        {
+            "unit": "xuchu",
+            "x": 0,
+            "y": 5,
+            "camp": "player"
+        },
+        {
+            "unit": "gongsunzan",
+            "x": 0,
+            "y": 4
+        }
+    ],
+    "enemy_spawn": [
+        {
+            "unit": "xurong",
+            "x": 9,
+            "y": 4
+        },
+        {
+            "unit": "xiliang_cavalry_1",
+            "x": 10,
+            "y": 3
+        },
+        {
+            "unit": "xiliang_cavalry_2",
+            "x": 10,
+            "y": 6
+        },
+        {
+            "unit": "xiliang_archer_1",
+            "x": 10,
+            "y": 5
+        },
+        {
+            "unit": "xiliang_archer_2",
+            "x": 8,
+            "y": 2
+        }
+    ],
+    "morale": {
+        "player": 100,
+        "enemy": 100
+    },
+    "win_condition": "kill_commander",
+    "lose_condition": "player_all_dead",
+    "events": [
+        {
+            "turn": 1,
+            "type": "dialog",
+            "key": "chapter5_open"
+        },
+        {
+            "turn": 3,
+            "type": "dialog",
+            "key": "chapter5_fire"
+        }
+    ],
+    "stages": [
+        {
+            "id": "save_civilians",
+            "title": "火海护民",
+            "objective": "坚守 3 回合，顶住西凉断后部队，给百姓留出撤离时间",
+            "win": {
+                "type": "survive_turns",
+                "value": 3
+            },
+            "on_clear": "最后一批百姓冲出火场——该跟放火的人算账了"
+        },
+        {
+            "id": "chase_dongzhuo",
+            "title": "追击断后",
+            "objective": "击退断后的西凉中郎将【徐荣】，撕开追击董卓的通道",
+            "win": {
+                "type": "defeat_commander"
+            },
+            "on_clear": "徐荣败走，洛阳城外的西凉军阵线彻底崩了"
+        }
+    ]
+}

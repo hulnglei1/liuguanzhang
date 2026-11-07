@@ -152,15 +152,16 @@ func _init() -> void:
 		failed += 1
 
 	# ----------------------------------------------------
-	# 7. 测试动态士气系统（平滑线性修正 0.50 ~ 1.50）
+	# 7. 测试动态士气系统（滚雪球：每 1 点士气 = 1%，范围 0.40 ~ 2.00）
 	# ----------------------------------------------------
 	var m100 = CombatCore.morale_multiplier(100) # 1.0
-	var m130 = CombatCore.morale_multiplier(130) # 1.15
-	var m70 = CombatCore.morale_multiplier(70)   # 0.85
-	var m0 = CombatCore.morale_multiplier(0)     # 0.50
-	var m150 = CombatCore.morale_multiplier(150) # 1.25
-	if is_equal_approx(m100, 1.0) and is_equal_approx(m130, 1.15) and is_equal_approx(m70, 0.85) and is_equal_approx(m0, 0.5) and is_equal_approx(m150, 1.25):
-		print("  [PASS] 动态士气倍率计算精确: 100->1.00, 130->1.15, 70->0.85, 0->0.50, 150->1.25")
+	var m130 = CombatCore.morale_multiplier(130) # 1.30
+	var m70 = CombatCore.morale_multiplier(70)   # 0.70
+	var m0 = CombatCore.morale_multiplier(0)     # 0.40
+	var m150 = CombatCore.morale_multiplier(150) # 1.50
+	var m200 = CombatCore.morale_multiplier(200) # 2.00（打崩对面 = 全员双倍）
+	if is_equal_approx(m100, 1.0) and is_equal_approx(m130, 1.30) and is_equal_approx(m70, 0.70) and is_equal_approx(m0, 0.4) and is_equal_approx(m150, 1.5) and is_equal_approx(m200, 2.0):
+		print("  [PASS] 士气滚雪球倍率: 100->1.00, 130->1.30, 70->0.70, 0->0.40, 150->1.50, 200->2.00")
 		passed += 1
 	else:
 		printerr("  [FAIL] 士气倍率计算有偏差: m100=%.2f, m130=%.2f, m70=%.2f" % [m100, m130, m70])
@@ -169,7 +170,7 @@ func _init() -> void:
 	# 验证应用士气至单位
 	huaxiong.gate_broken_debuff = false
 	MoraleCore.apply_morale([huaxiong], 130)
-	if huaxiong.effective_atk() == int(round(35.0 * 1.15)) and huaxiong.effective_def() == int(round(20.0 * 1.15)):
+	if huaxiong.effective_atk() == int(round(35.0 * 1.30)) and huaxiong.effective_def() == int(round(20.0 * 1.30)):
 		print("  [PASS] 士气动态提升敌军攻防（ATK 35->%d, DEF 20->%d）" % [huaxiong.effective_atk(), huaxiong.effective_def()])
 		passed += 1
 	else:

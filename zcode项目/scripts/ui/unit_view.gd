@@ -35,21 +35,25 @@ const FX_LAYER_NAME := "UnitFxLayer"
 
 ## ---------- 一、外观构建 ----------
 
-const OUTLINE_SHADER := preload("res://assets/shaders/unit_outline.gdshader")
+const UNIT_SHADER := preload("res://assets/shaders/unit_shader.gdshader")
 
 ## 给单位挂"描边光"材质：深色角色在深绿棋盘上会糊掉，靠一圈暖色轮廓把剪影拉出来。
 ## 只作用于有贴图的单位，不改任何美术资源。
-static func _apply_outline(canvas: CanvasItem) -> void:
+## breath_amp_px > 0 时同时启用锁脚呼吸（静态贴图用；有序列帧的单位不需要）
+static func _apply_outline(canvas: CanvasItem, breath_amp_px: float = 0.0) -> void:
 	if canvas == null:
 		return
 	# 无头（Dummy 渲染器）下自定义 shader 会拖住进程退出 → 自动化测试里直接跳过
 	if DisplayServer.get_name() == "headless":
 		return
 	var mat := ShaderMaterial.new()
-	mat.shader = OUTLINE_SHADER
+	mat.shader = UNIT_SHADER
 	mat.set_shader_parameter("rim_color", Color(1.0, 0.94, 0.78, 1.0))
 	mat.set_shader_parameter("outline_px", 5.0)
 	mat.set_shader_parameter("strength", 0.5)
+	mat.set_shader_parameter("breath_active", breath_amp_px > 0.0)
+	mat.set_shader_parameter("breath_amp", breath_amp_px)
+	mat.set_shader_parameter("breath_speed", 2.0)
 	canvas.material = mat
 
 
@@ -76,7 +80,7 @@ static func build_art(node: Node2D, unit_id: String, tile: float) -> bool:
 		var s: float = target_h / maxf(1.0, tex_h)
 		anim_spr.scale = Vector2(s, s)
 		anim_spr.position = Vector2(0, -target_h * 0.5 + ART_Y_OFFSET)
-		_apply_outline(anim_spr)
+		_apply_outline(anim_spr, 0.0)   # 序列帧本身就在动，不再叠 shader 呼吸
 		node.add_child(anim_spr)
 		apply_idle_breath(anim_spr)
 		return true
@@ -90,7 +94,8 @@ static func build_art(node: Node2D, unit_id: String, tile: float) -> bool:
 		var s2: float = target_h2 / float(maxi(1, art.get_height()))
 		spr.scale = Vector2(s2, s2)
 		spr.position = Vector2(0, -target_h2 * 0.5 + ART_Y_OFFSET)
-		_apply_outline(spr)
+		var breath_px: float = float(maxi(1, art.get_height())) * 0.018
+		_apply_outline(spr, breath_px)
 		node.add_child(spr)
 		apply_idle_breath(spr)
 		return true
@@ -107,6 +112,8 @@ static func build_art(node: Node2D, unit_id: String, tile: float) -> bool:
 ##   纯 GPU、零 CPU 开销，且天然不会产生"格子漂移"。
 ## 备选：Tween 缩放 sprite.scale.y（注意要以脚底为轴心，否则会上下漂）。
 static func apply_idle_breath(sprite: Node2D) -> void:
+	# 呼吸已并入 unit_shader（vertex 阶段），这里不再单独挂 material。
+	# 保留函数是为了不破坏 battle.gd 的既有调用。
 	pass
 
 

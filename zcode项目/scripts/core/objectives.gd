@@ -32,6 +32,25 @@ static func stage_cleared(stage: Dictionary, ctx: Dictionary) -> bool:
 			# 招降：把目标打到最后 X% 血即逼其归顺（原著里许褚是被招揽的，不是被杀）
 			# 若一击致死也算达成（剧情按"打昏后收服"处理）
 			return _hp_below(ctx, str(win.get("target", "")), float(win.get("ratio", 0.3)))
+		"repel_to_edge":
+			# 击退到地图边缘（原著：把臧霸打回泰山东边的琅琊郡）
+			var u2 := _unit_info(ctx, str(win.get("target", "")))
+			if u2.is_empty() or not bool(u2.get("alive", true)):
+				return true                      # 目标阵亡也算达成
+			var cell: Array = u2.get("cell", [0, 0])
+			var edge: String = str(win.get("edge", "east"))
+			var mw: int = int(ctx.get("map_w", 12))
+			var mh: int = int(ctx.get("map_h", 10))
+			match edge:
+				"east":
+					return int(cell[0]) >= mw - 1
+				"west":
+					return int(cell[0]) <= 0
+				"south":
+					return int(cell[1]) >= mh - 1
+				"north":
+					return int(cell[1]) <= 0
+			return false
 		_:
 			return false
 
