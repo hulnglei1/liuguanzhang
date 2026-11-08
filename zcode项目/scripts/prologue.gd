@@ -45,6 +45,8 @@ var prompt_label: Label
 var typing := false
 var type_tween: Tween
 var portrait_rect: TextureRect
+var portrait_prev: TextureRect
+var _last_speaker_key: String = ""
 
 
 func _ready() -> void:
@@ -179,6 +181,18 @@ func _build_body_layer() -> Control:
 	portrait_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(portrait_rect)
 
+	# 左侧"上一位说话人"：用来做"两人同框"的近似（左暗右亮）
+	# 真正的双人立绘需要成对的构图素材；这里用"维持上一位 + 压暗"换 80% 的观感
+	portrait_prev = TextureRect.new()
+	portrait_prev.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	portrait_prev.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	portrait_prev.position = Vector2(60, 190)
+	portrait_prev.size = Vector2(320, 420)
+	portrait_prev.visible = false
+	portrait_prev.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	portrait_prev.modulate = Color(0.62, 0.62, 0.68, 0.85)
+	layer.add_child(portrait_prev)
+
 	# 人物名牌（对白用）
 	speaker_plate = PanelContainer.new()
 	speaker_plate.position = Vector2(180, 276)
@@ -272,14 +286,28 @@ func _update_portrait(line: Dictionary) -> void:
 		return
 	var key := PortraitLoaderCore.resolve_key(line)
 	if key.is_empty():
+		# 纯旁白：画面交给留白，人物全部收起
 		portrait_rect.visible = false
+		if portrait_prev != null:
+			portrait_prev.visible = false
+		_last_speaker_key = ""
 		return
 	var tex := PortraitLoaderCore.load_for(key, PortraitLoaderCore.resolve_emotion(line))
 	if tex == null:
 		portrait_rect.visible = false
-	else:
-		portrait_rect.texture = tex
-		portrait_rect.visible = true
+		return
+	portrait_rect.texture = tex
+	portrait_rect.visible = true
+	# 换人说话时，把上一位挪到左边继续站着（暗一档）——近似"两人同框"
+	if portrait_prev != null:
+		if key != _last_speaker_key and not _last_speaker_key.is_empty():
+			var prev_tex := PortraitLoaderCore.load_for(_last_speaker_key)
+			if prev_tex != null:
+				portrait_prev.texture = prev_tex
+				portrait_prev.visible = true
+		elif key == _last_speaker_key:
+			pass
+	_last_speaker_key = key
 
 
 func _type_in(body: String) -> void:
@@ -306,13 +334,25 @@ func _advance() -> void:
 		_next()
 
 
-func _unhandled_input(event: InputEvent) -> void:
+## 用 _input 而不是 _unhandled_input：
+## 序章里铺了满屏 Control（背景板/对话框），默认 mouse_filter=STOP 会把点击吃掉，
+## _unhandled_input 永远收不到 —— 表现就是"左键点了没反应，只能按空格"。
+func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SPACE or event.keycode == KEY_ENTER:
 			_advance()
+			_mark_handled()
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_advance()
+			_mark_handled()
+
+
+## 标记输入已消费。--script 测试模式下没有 viewport，必须判空。
+func _mark_handled() -> void:
+	var vp := get_viewport()
+	if vp != null:
+		vp.set_input_as_handled()
 
 
 func _finish() -> void:

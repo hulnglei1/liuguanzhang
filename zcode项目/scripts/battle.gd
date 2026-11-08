@@ -545,17 +545,33 @@ func _enemy_commander() -> BattleUnitScript:
 			return u
 	return null
 
-func _blocked_cells(exclude: String = "") -> Array[Vector2i]:
+## 通行阻挡：地形 + 敌对单位。
+## pass_camp 非空时，该阵营的单位**不阻挡通行**（友军可穿过），但落点仍要用 _cell_occupied 校验。
+func _blocked_cells(exclude: String = "", pass_camp: String = "") -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for u in units:
 		if u.alive and u.id != exclude:
 			# 被骑乘的坐骑不作为独立占位障碍
 			if u.mount.has("rider"):
 				continue
+			if pass_camp != "" and u.camp == pass_camp:
+				continue
 			out.append(u.cell)
 	for o in chapter["map"]["obstacles"]:
 		out.append(Vector2i(o.x, o.y))
 	return out
+
+
+## 该格是否已被单位占住（不能作为落点）。友军可以穿过，但不能叠在一起。
+func _cell_occupied(cell: Vector2i, exclude: String = "") -> bool:
+	for u in units:
+		if not u.alive or u.id == exclude:
+			continue
+		if u.mount.has("rider"):
+			continue
+		if u.cell == cell:
+			return true
+	return false
 
 func _get_unit_mov(u: BattleUnitScript) -> int:
 	return u.effective_mov()
@@ -795,9 +811,14 @@ func _select_unit(id: String) -> void:
 		command_menu.visible = false
 		return
 	_clear_overlay()
-	var blocked := _blocked_cells(id)
+	# 友军可穿过（不算阻挡），但被占的格子不能作为落点
+	var blocked := _blocked_cells(id, u.camp)
 	var reach := GridCore.reachable(u.cell, _get_unit_mov(u), MAP_W, MAP_H, blocked)
-	_draw_cells(reach.keys(), Color(0.2, 0.8, 0.4, 0.35))
+	var landable: Array[Vector2i] = []
+	for c in reach.keys():
+		if not _cell_occupied(c, id):
+			landable.append(c)
+	_draw_cells(landable, Color(0.2, 0.8, 0.4, 0.35))
 	input_mode = InputMode.SELECT
 	_update_dashboard()
 	_clear_command_menu()
@@ -1260,7 +1281,11 @@ func _do_wait(u) -> void:
 ## ---------- 移动 ----------
 func _is_in_reachable(cell: Vector2i) -> bool:
 	var u: BattleUnitScript = _unit_by_id(selected_id)
-	var blocked := _blocked_cells(selected_id)
+	if u == null:
+		return false
+	if _cell_occupied(cell, selected_id):
+		return false
+	var blocked := _blocked_cells(selected_id, u.camp)
 	return GridCore.reachable(u.cell, _get_unit_mov(u), MAP_W, MAP_H, blocked).has(cell)
 
 func _do_move(cell: Vector2i) -> void:
@@ -1279,8 +1304,11 @@ func _do_move(cell: Vector2i) -> void:
 		info_label.text = "%s 本回合已经移动过了（移动后只能攻击 / 绝技 / 待机 / 撤回移动）" % u.name
 		_show_command_menu()
 		return
+	if _cell_occupied(cell, u.id):
+		info_label.text = "%s 那里已经有友军了，可以穿过但不能停留。" % u.name
+		return
 	u.moved_this_turn = true
-	var blocked := _blocked_cells(selected_id)
+	var blocked := _blocked_cells(selected_id, u.camp)
 	var path := GridCore.path(u.cell, cell, MAP_W, MAP_H, blocked)
 	var moved_cells := path.size()
 	move_origin_cell = u.cell
@@ -1464,11 +1492,11 @@ func _is_in_skill_range(cell: Vector2i) -> bool:
 			# 所以："能打的范围"是相邻格，"能伤害的范围"是一条线。
 			return (cell - u.cell) in GridCore.DIRS4
 		"roar":
-			var roar_r := 2
+			var roar_r := 1
 			var save := SaveCore.load_state()
 			var inv: Dictionary = save.get("inventory", {})
 			if int(inv.get("megaphone", 0)) > 0:
-				roar_r = 4
+				roar_r = 2
 			return GridCore.chebyshev(u.cell, cell) <= roar_r
 		"seven_dash":
 			return GridCore.chebyshev(u.cell, cell) <= u.mov
@@ -1622,7 +1650,9 @@ func _execute_roar(words: int) -> void:
 	if u == null or not u.alive:
 		return
 	var full: bool = words >= ROAR_WORDS_MAX
-	var roar_r: int = 3 if full else 2
+	# 原著「附近的士兵被震得头晕目眩」——强调"附近"，不是半个战场。
+	# 6 字：相邻一圈（半径1）；14 字：两格（半径2）；高音大喇叭 +1
+	var roar_r: int = 2 if full else 1
 	var save: Dictionary = SaveCore.load_state()
 	var inv: Dictionary = save.get("inventory", {})
 	if int(inv.get("megaphone", 0)) > 0:
@@ -2168,7 +2198,7 @@ func _run_enemy_turn() -> void:
 			_move_away(u, target.cell)
 			_spawn_float_text(u.cell, "😭 别打了！大哥饶命！我就是个打下手的！", Color(0.95, 0.85, 0.3), false)
 			info_label.text += "\n昌豨被吓破了胆，抱头鼠窜往后撤退！"
-			await get_tree().create_timer(0.12).timeout
+			await get_tree().create_timer(0.30).timeout
 			continue
 		# 打回琅琊：被击溃的目标不再恋战，往东边（琅琊方向）撤退
 		# 每回合只退 1 格 —— 给玩家一个"追上去补刀"的窗口，而不是一眨眼就跑没
@@ -2177,28 +2207,28 @@ func _run_enemy_turn() -> void:
 			_move_toward(u, one_step)
 			_spawn_float_text(u.cell, "💨 败走！往琅琊方向退！", Color(1.0, 0.7, 0.3), true)
 			info_label.text += "\n%s 无心恋战，率残部向东边的琅琊郡撤退！" % u.name
-			await get_tree().create_timer(0.3).timeout
+			await get_tree().create_timer(0.55).timeout
 			continue
 		# 出手前高亮目标 + 短停顿，让玩家看清
 		_flash_unit(target.id, Color(1, 0.6, 0.2))
-		await get_tree().create_timer(0.12).timeout
+		await get_tree().create_timer(0.30).timeout
 		# 怎么打由 AI 决策层决定（scripts/systems/enemy_ai.gd），这里只负责执行
 		match EnemyAICore.attack_intent(u, target):
 			"kite_approach":
 				_move_toward(u, target.cell)
-				await get_tree().create_timer(0.1).timeout
+				await get_tree().create_timer(0.28).timeout
 				if GridCore.chebyshev(u.cell, target.cell) <= u.rng:
 					_ai_attack(u, target)
 			"kite_back":
 				_move_away(u, target.cell)
-				await get_tree().create_timer(0.1).timeout
+				await get_tree().create_timer(0.28).timeout
 				if GridCore.chebyshev(u.cell, target.cell) <= u.rng:
 					_ai_attack(u, target)
 			"attack":
 				_ai_attack(u, target)
 			_:
 				_move_toward(u, target.cell)
-				await get_tree().create_timer(0.1).timeout
+				await get_tree().create_timer(0.28).timeout
 				if GridCore.can_attack(u.cell, target.cell, u.is_cavalry(), u.rng):
 					_ai_attack(u, target)
 	# 敌回合结束
@@ -2240,7 +2270,7 @@ func _nearest_player(u) -> BattleUnitScript:
 	return best
 
 func _move_toward(u, target_cell: Vector2i) -> void:
-	var blocked := _blocked_cells(u.id)
+	var blocked := _blocked_cells(u.id, u.camp)
 	var filtered_blocked: Array[Vector2i] = []
 	for c in blocked:
 		if c != target_cell:
@@ -2248,6 +2278,9 @@ func _move_toward(u, target_cell: Vector2i) -> void:
 	var path := GridCore.path(u.cell, target_cell, MAP_W, MAP_H, filtered_blocked)
 	if path.size() > 0:
 		var max_step: int = mini(int(u.mov), path.size() - 1)
+		# 友军可穿过，但落点必须是空位：从终点往回找第一个不 occupied 的
+		while max_step > 0 and _cell_occupied(path[max_step - 1], u.id):
+			max_step -= 1
 		if max_step > 0:
 			var step: Vector2i = path[max_step - 1]
 			u.cell = step
@@ -2256,7 +2289,8 @@ func _move_toward(u, target_cell: Vector2i) -> void:
 func _move_away(u, target_cell: Vector2i) -> void:
 	var dir: Vector2i = (u.cell - target_cell).sign()
 	var nxt: Vector2i = u.cell + dir
-	if GridCore.in_bounds(nxt, MAP_W, MAP_H) and nxt not in _blocked_cells(u.id):
+	if GridCore.in_bounds(nxt, MAP_W, MAP_H) and nxt not in _blocked_cells(u.id, u.camp) \
+			and not _cell_occupied(nxt, u.id):
 		u.cell = nxt
 		_sync_node(u)
 
@@ -2296,6 +2330,7 @@ func _ai_attack(u, target) -> void:
 		_check_defeat()
 
 func _begin_player_turn() -> void:
+	_spawn_banner("⚔ 我方回合", Color(0.45, 0.8, 1.0))
 	if defeat or victory:
 		return
 	_update_homing_arrows()

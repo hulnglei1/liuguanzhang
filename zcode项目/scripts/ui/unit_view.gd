@@ -53,7 +53,7 @@ static func _apply_outline(canvas: CanvasItem, breath_amp_px: float = 0.0) -> vo
 	mat.set_shader_parameter("strength", 0.5)
 	mat.set_shader_parameter("breath_active", breath_amp_px > 0.0)
 	mat.set_shader_parameter("breath_amp", breath_amp_px)
-	mat.set_shader_parameter("breath_speed", 2.0)
+	mat.set_shader_parameter("breath_speed", 3.14)   # 周期 2 秒，与序列帧对齐
 	canvas.material = mat
 
 
@@ -94,7 +94,7 @@ static func build_art(node: Node2D, unit_id: String, tile: float) -> bool:
 		var s2: float = target_h2 / float(maxi(1, art.get_height()))
 		spr.scale = Vector2(s2, s2)
 		spr.position = Vector2(0, -target_h2 * 0.5 + ART_Y_OFFSET)
-		var breath_px: float = float(maxi(1, art.get_height())) * 0.018
+		var breath_px: float = float(maxi(1, art.get_height())) * 0.008   # 幅度减半，避免"整张图被拉伸"的怪感
 		_apply_outline(spr, breath_px)
 		node.add_child(spr)
 		apply_idle_breath(spr)
@@ -366,6 +366,9 @@ static func update_unit_visuals(u, node: Node2D) -> void:
 		var s := ""
 		if u.is_stunned():
 			s += "💫"
+			# 眩晕要一眼可辨：放大 + 紫色（配合紫色闪光）
+			status.add_theme_font_size_override("font_size", 20)
+			status.add_theme_color_override("font_color", Color(0.78, 0.55, 1.0))
 		if u.is_mounted():
 			s += "🐎"
 		if u.rage_multiplier > 1.1 or u.hua_rage_turns > 0:
@@ -374,11 +377,19 @@ static func update_unit_visuals(u, node: Node2D) -> void:
 			s += "🛡️"
 		status.text = s
 
-	# 未行动 vs 已行动半透明调和
+	# 已行动：灰蓝 + 降透明 + 暂停待机动画（三者叠加才一眼能看出来）
+	var anim: AnimatedSprite2D = node.get_node_or_null("ArtAnim")
 	if u.camp == "player":
-		node.modulate.a = 0.6 if u.acted else 1.0
+		if u.acted:
+			node.modulate = Color(0.52, 0.55, 0.62, 0.72)
+			if anim != null and anim.animation == "idle" and anim.is_playing():
+				anim.pause()
+		else:
+			node.modulate = Color(1, 1, 1, 1)
+			if anim != null and anim.animation == "idle" and not anim.is_playing():
+				anim.play("idle")
 	else:
-		node.modulate.a = 1.0
+		node.modulate = Color(1, 1, 1, 1)
 
 
 static func character_base_color(u) -> Color:
