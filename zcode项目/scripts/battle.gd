@@ -25,6 +25,9 @@ const EnemyAICore := preload("res://scripts/systems/enemy_ai.gd")
 const BattleDashboardCore := preload("res://scripts/ui/battle_dashboard.gd")
 const BattleVfxCore := preload("res://scripts/ui/vfx.gd")
 
+## 走格动画：每格秒数（0.045 秒/格 → 4 格 0.18 秒，够快又不糊）
+const MOVE_SEG_TIME := 0.045
+
 ## UI 图标（朱红印章，见 tools/gen_icons.py）—— 命令菜单按钮用 Button.icon 挂
 const ICON_ATTACK := preload("res://assets/icons/attack.png")
 const ICON_SKILL := preload("res://assets/icons/skill.png")
@@ -1362,7 +1365,8 @@ func _do_move(cell: Vector2i) -> void:
 	_sync_text(u)
 
 	# 移动完成后进入 POST_MOVE 状态，弹出贴身指令弹窗（曹操传模式：移动后仍可攻击）
-	var move_duration: float = float(moved_cells) * 0.06
+	# 等待时长必须和动画一致，否则单位还没走到位、菜单就弹出来了
+	var move_duration: float = float(moved_cells) * MOVE_SEG_TIME
 	if move_duration > 0:
 		await get_tree().create_timer(move_duration).timeout
 	input_mode = InputMode.POST_MOVE
@@ -1374,10 +1378,9 @@ func _animate_move(u, path: Array) -> void:
 	if node == null or path.size() == 0:
 		return
 	var tw := create_tween()
-	var start := _cell_to_px(u.cell)
-	var seg_time := 0.06
+	var seg_time := MOVE_SEG_TIME
 	for p in path:
-		tw.tween_interval(seg_time)
+		# 不再先 tween_interval 空等一拍——那样每格实际耗时翻倍，起步还会迟钝
 		tw.tween_property(node, "position", _cell_to_px(p), seg_time)
 	# 动画结束校正到最终格
 	tw.finished.connect(func(): node.position = _cell_to_px(u.cell))

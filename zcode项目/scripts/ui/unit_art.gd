@@ -58,7 +58,7 @@ static func load_frames_for(unit_id: String) -> SpriteFrames:
 		sf.add_frame("idle", attack_frames[0])
 	# 2. 攻击（单次）
 	sf.add_animation("attack")
-	sf.set_animation_speed("attack", 6.0)
+	sf.set_animation_speed("attack", 10.0)   # 4 帧 0.4 秒，别拖过冲刺位移
 	sf.set_animation_loop("attack", false)
 	if not attack_frames.is_empty():
 		for f in attack_frames:
