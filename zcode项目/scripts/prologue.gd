@@ -195,7 +195,8 @@ func _build_body_layer() -> Control:
 
 	# 人物名牌（对白用）
 	speaker_plate = PanelContainer.new()
-	speaker_plate.position = Vector2(180, 276)
+	# 名牌放在右侧当前立绘这一边（左边是上一位说话人，别压住他的脸）
+	speaker_plate.position = Vector2(700, 276)
 	speaker_plate.size = Vector2(120, 36)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.3, 0.3, 0.3)
