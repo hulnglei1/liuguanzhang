@@ -46,7 +46,11 @@ var typing := false
 var type_tween: Tween
 var portrait_rect: TextureRect
 var portrait_prev: TextureRect
+var illustration_rect: TextureRect
 var _last_speaker_key: String = ""
+## 进入序章后的输入冷静期（毫秒时间戳）。
+## 点"进军出征"的那次鼠标/按键事件会漏进刚创建的序章，一次点击能推进好几行。
+var _input_grace_until: int = 0
 
 
 func _ready() -> void:
@@ -181,6 +185,16 @@ func _build_body_layer() -> Control:
 	portrait_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(portrait_rect)
 
+	# 关键剧情用"整幅构图"（多人同框、大场面）：一张图胜过三张单人像并排
+	illustration_rect = TextureRect.new()
+	illustration_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	illustration_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	illustration_rect.position = Vector2(120, 58)
+	illustration_rect.size = Vector2(1040, 556)
+	illustration_rect.visible = false
+	illustration_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(illustration_rect)
+
 	# 左侧"上一位说话人"：用来做"两人同框"的近似（左暗右亮）
 	# 真正的双人立绘需要成对的构图素材；这里用"维持上一位 + 压暗"换 80% 的观感
 	portrait_prev = TextureRect.new()
@@ -235,6 +249,8 @@ func _run() -> void:
 	await get_tree().create_timer(2.4).timeout
 	title_layer.visible = false
 	body_layer.visible = true
+	# 360ms 内忽略输入：挡住"点进关"的那一下点击/按键漏进序章
+	_input_grace_until = Time.get_ticks_msec() + 360
 	_next()
 
 
@@ -249,6 +265,8 @@ func _next() -> void:
 
 	var speaker := str(line.get("speaker", ""))
 	var body := str(line.get("text", ""))
+	if illustration_rect != null:
+		illustration_rect.visible = false
 	_update_portrait(line)
 
 	match kind:
@@ -268,6 +286,24 @@ func _next() -> void:
 			text_label.size = Vector2(640, 240)
 			text_label.add_theme_color_override("default_color", COL_TEXT)
 			_type_in(body)
+		"illustration":
+			# 整幅构图：收起单人立绘与名牌，图占主体，文字做图下注释
+			speaker_plate.visible = false
+			portrait_rect.visible = false
+			if portrait_prev != null:
+				portrait_prev.visible = false
+			_last_speaker_key = ""
+			var img := str(line.get("image", ""))
+			if img != "" and ResourceLoader.exists(img):
+				illustration_rect.texture = load(img)
+				illustration_rect.visible = true
+			text_label.position = Vector2(160, 596)
+			text_label.size = Vector2(960, 76)
+			text_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+			text_label.add_theme_constant_override("shadow_offset_x", 2)
+			text_label.add_theme_constant_override("shadow_offset_y", 2)
+			text_label.add_theme_color_override("default_color", COL_SCROLL)
+			_type_in("[center][i]" + body + "[/i][/center]")
 		"system":
 			speaker_plate.visible = false
 			text_label.position = Vector2(180, 300)
@@ -339,6 +375,9 @@ func _advance() -> void:
 ## 序章里铺了满屏 Control（背景板/对话框），默认 mouse_filter=STOP 会把点击吃掉，
 ## _unhandled_input 永远收不到 —— 表现就是"左键点了没反应，只能按空格"。
 func _input(event: InputEvent) -> void:
+	if Time.get_ticks_msec() < _input_grace_until:
+		_mark_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SPACE or event.keycode == KEY_ENTER:
 			_advance()

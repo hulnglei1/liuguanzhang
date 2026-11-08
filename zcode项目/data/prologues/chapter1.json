@@ -16,6 +16,11 @@
             "text": "观众朋友们，点点赞，把赞点到五十万，咱们马上结拜！"
         },
         {
+            "type": "illustration",
+            "image": "res://assets/prologue/taoyuan.png",
+            "text": "桃园之中，一炉香火，三个人把彼此的名字刻进了命里。"
+        },
+        {
             "type": "scroll",
             "text": "三人对着关公像虔诚一拜。\n再抬头时，唰——眼前成了营帐。"
         },

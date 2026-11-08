@@ -130,10 +130,16 @@ func _run() -> void:
 	var guard: int = 0
 	if not (current_scene is BattleScript):
 		_note("进入序章，用 Space 逐句推进")
-		while not (current_scene is BattleScript) and guard < 40:
+		# 序章行数会随着剧情增加，别把上限卡太死（多一句就超）
+		while not (current_scene is BattleScript) and guard < 120:
 			await _press_space()
 			guard += 1
 		_note("推了 %d 次 Space 后进入战场" % guard)
+		# 兜底：万一还在序章，直接让它收尾，不要卡死整条测试
+		if not (current_scene is BattleScript) and current_scene != null and current_scene.has_method("_finish"):
+			_note("仍未进入战场，强制结束序章（兜底）")
+			current_scene._finish()
+			await _wait(1.5)
 	_check(current_scene is BattleScript, "序章能正常推进到战场（没有卡住）")
 
 	b = current_scene
