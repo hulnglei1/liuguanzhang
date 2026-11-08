@@ -33,8 +33,11 @@ func _initialize() -> void:
 			sf.get_animation_speed("idle"), sf.get_animation_speed("attack")])
 
 	# 没做动画的单位应回退（不能报错）
-	var sf_lubu: SpriteFrames = UnitArtLoaderCore.load_frames_for("lubu")
-	print("  未做动画的单位（lubu）→ %s（应为 null，回退静态/色块）" % ("null ✅" if sf_lubu == null else "非 null ⚠"))
+	# 主将/主角都已补序列帧；杂兵仍是静态图 → 应该回退成 null（走静态 sprite 分支）
+	var sf_soldier: SpriteFrames = UnitArtLoaderCore.load_frames_for("taishan_1")
+	print("  未做动画的杂兵（taishan_1）→ %s（应为 null，回退静态）" % ("null ✅" if sf_soldier == null else "非 null ⚠"))
+	if sf_soldier != null:
+		failed += 1
 
 	_run_scene()
 
@@ -62,6 +65,20 @@ func _run_scene() -> void:
 		quit(1)
 		return
 	print("  ✅ 关羽使用 AnimatedSprite2D，当前动作：%s" % anim.animation)
+
+	# 四位主角都应走序列帧（手绘 + 程序化都必须接上 ArtAnim）
+	for uid in ["liubei", "zhangfei", "zhaoyun"]:
+		var n2: Node2D = b.unit_nodes.get(uid) if b.unit_nodes.has(uid) else null
+		if n2 == null:
+			# 该关没上这个人，跳过（第 1 关只有刘关张赵，通常都在）
+			print("  ⚠ %s 不在本关编成内，跳过" % uid)
+			continue
+		var a2: AnimatedSprite2D = n2.get_node_or_null("ArtAnim")
+		if a2 == null:
+			print("  ❌ %s 没有 ArtAnim（序列帧没接上，退回静态图了）" % uid)
+			failed += 1
+		else:
+			print("  ✅ %s 使用序列帧，当前动作：%s（帧数 %d）" % [uid, a2.animation, a2.sprite_frames.get_frame_count("idle")])
 	if anim.animation == "idle" and anim.is_playing():
 		print("  ✅ 待机呼吸动画正在循环播放")
 	else:
