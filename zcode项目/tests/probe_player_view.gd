@@ -193,7 +193,7 @@ func _run() -> void:
 	await _wait(0.3)
 	var roar_btn: Button = null
 	for c in b.command_menu.find_children("*", "Button", true, false):
-		if c is Button and (c as Button).text.begins_with("✨"):
+		if c is Button and ((c as Button).name == "cmd_skill" or (c as Button).text.contains("龙斩") or (c as Button).text.contains("咆哮")):
 			roar_btn = c
 	if roar_btn == null:
 		_check(false, "张飞菜单里找不到技能按钮")

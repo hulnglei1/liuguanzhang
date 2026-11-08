@@ -41,7 +41,7 @@ func _check(ok: bool, msg: String) -> void:
 func _find_skill_button() -> Button:
 	var btns: Array = b.command_menu.find_children("*", "Button", true, false)
 	for c in btns:
-		if c is Button and (c as Button).text.begins_with("✨"):
+		if c is Button and ((c as Button).name == "cmd_skill" or (c as Button).text.contains("龙斩") or (c as Button).text.contains("咆哮")):
 			return c
 	return null
 

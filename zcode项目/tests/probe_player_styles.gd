@@ -55,7 +55,7 @@ func _skip_dialog() -> void:
 
 func _find_skill_btn() -> Button:
 	for c in b.command_menu.find_children("*", "Button", true, false):
-		if c is Button and (c as Button).text.begins_with("✨"):
+		if c is Button and ((c as Button).name == "cmd_skill" or (c as Button).text.contains("龙斩") or (c as Button).text.contains("咆哮")):
 			return c
 	return null
 

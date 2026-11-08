@@ -23,6 +23,14 @@ const SfxCore := preload("res://scripts/systems/sfx.gd")
 const BattleMapViewCore := preload("res://scripts/ui/battle_map.gd")
 const EnemyAICore := preload("res://scripts/systems/enemy_ai.gd")
 const BattleDashboardCore := preload("res://scripts/ui/battle_dashboard.gd")
+const BattleVfxCore := preload("res://scripts/ui/vfx.gd")
+
+## UI 图标（朱红印章，见 tools/gen_icons.py）—— 命令菜单按钮用 Button.icon 挂
+const ICON_ATTACK := preload("res://assets/icons/attack.png")
+const ICON_SKILL := preload("res://assets/icons/skill.png")
+const ICON_DEF := preload("res://assets/icons/def.png")
+const ICON_MOVE := preload("res://assets/icons/move.png")
+const ICON_ENDTURN := preload("res://assets/icons/endturn.png")
 
 const TILE := 52.0          # 格子像素（升级为52以充实画面）
 const MAP_OFFSET := Vector2(24.0, 66.0) # 棋盘左上角偏移
@@ -284,7 +292,12 @@ func _draw_grid() -> void:
 	var grid_node := map_root.get_node_or_null("GridLines")
 	if grid_node == null:
 		return
-	BattleMapViewCore.draw_grid(grid_node, MAP_OFFSET, TILE, MAP_W, MAP_H)
+	BattleMapViewCore.draw_grid(grid_node, MAP_OFFSET, TILE, MAP_W, MAP_H, _ground_variant())
+
+
+## 地面变体：第 5 关洛阳是火场，其余是草地
+func _ground_variant() -> String:
+	return "fire" if chapter_id == "chapter5" else "grass"
 
 
 func _draw_hills() -> void:
@@ -304,7 +317,7 @@ func _draw_obstacles() -> void:
 	if not chapter.has("map"):
 		return
 	obstacle_nodes = BattleMapViewCore.draw_obstacles(
-		map_root, chapter["map"].get("obstacles", []), MAP_OFFSET, TILE)
+		map_root, chapter["map"].get("obstacles", []), MAP_OFFSET, TILE, _ground_variant())
 
 
 func _ready_init_title() -> void:
@@ -563,7 +576,32 @@ func _sync_text(u) -> void:
 	_update_dashboard()
 
 ## ---------- 输入交互 ----------
+## ---------- 键位表（集中一处，方便改键） ----------
+## 推进对白与喊字：空格 / 回车
+const KEY_ADVANCE: Array = [KEY_SPACE, KEY_ENTER]
+## 结束回合：空格（再按一次确认）
+const KEY_END_TURN: int = KEY_SPACE
+
+
+## 输入分发：按当前阶段转给对应的处理函数
 func _input(event: InputEvent) -> void:
+	# 1. 剧情对白阶段
+	if dialog_showing:
+		_input_dialog(event)
+		return
+	# 2. 燕人咆哮喊字阶段
+	if input_mode == InputMode.ROAR:
+		_input_roar(event)
+		return
+	# 战败/胜利结算后不再接受战棋操作（对白仍可推进）
+	if defeat or victory:
+		return
+	# 3/4. 正常战棋交互
+	_input_board(event)
+
+
+## 对白阶段：点任意处 / 空格回车 → 下一句；点在"跳过剧情"按钮上则放行给按钮自己处理
+func _input_dialog(event: InputEvent) -> void:
 	# 1. 剧情对白阶段：点屏幕任意空白处、点对话框、按空格/回车，均立即翻到下一句！
 	if dialog_showing:
 		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -575,12 +613,15 @@ func _input(event: InputEvent) -> void:
 			_on_dialog_btn_pressed()
 			get_viewport().set_input_as_handled()
 			return
-		elif event.is_action_pressed("ui_accept") or (event is InputEventKey and event.pressed and (event.keycode == KEY_SPACE or event.keycode == KEY_ENTER)):
+		elif event.is_action_pressed("ui_accept") or (event is InputEventKey and event.pressed and (KEY_ADVANCE.has(event.keycode))):
 			_on_dialog_btn_pressed()
 			get_viewport().set_input_as_handled()
 			return
 		return
 
+
+## 燕人咆哮喊字阶段：连点累加字数，右键直接出手
+func _input_roar(event: InputEvent) -> void:
 	# 2. 燕人咆哮喊字阶段：连点左键/空格累加字数，字数越多威力越大（原著机制）
 	if input_mode == InputMode.ROAR:
 		if event is InputEventMouseButton and event.pressed:
@@ -593,19 +634,18 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 			return
 		if event is InputEventKey and event.pressed and not event.echo:
-			if event.keycode == KEY_SPACE or event.keycode == KEY_ENTER:
+			if KEY_ADVANCE.has(event.keycode):
 				_add_roar_word()
 				get_viewport().set_input_as_handled()
 				return
 		return
 
-	# 战败/胜利结算后不再接受战棋操作（对白仍可推进）
-	if defeat or victory:
-		return
 
+## 棋盘阶段：空格结束回合 / 右键取消 / 左键点格子
+func _input_board(event: InputEvent) -> void:
 	# 3. 空格 = 结束我方回合（对白/喊字阶段已在上方拦截）
 	#    有未行动单位时先警告，再按一次才确认 —— 避免"没行动就被跳过"
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_END_TURN:
 		if input_mode == InputMode.NONE and not dialog_showing:
 			_try_end_turn_by_space()
 			get_viewport().set_input_as_handled()
@@ -644,6 +684,7 @@ func _input(event: InputEvent) -> void:
 			if cell != Vector2i(-1, -1):
 				_handle_click(cell)
 				get_viewport().set_input_as_handled()
+
 
 func _handle_click(cell: Vector2i) -> void:
 	# 统一前置：点到"本回合已行动完毕的我方单位"一律只做查看，不进入任何可操作态。
@@ -824,7 +865,10 @@ func _show_command_menu() -> void:
 	var can_atk := _has_attackable_target(u)
 	var btn_atk := Button.new()
 	btn_atk.custom_minimum_size = Vector2(136, 34)
-	btn_atk.text = "⚔️ 普通攻击"
+	btn_atk.name = "cmd_attack"      # 供自动化测试精确定位（别依赖按钮文案）
+	btn_atk.text = "普通攻击"
+	btn_atk.icon = ICON_ATTACK
+	btn_atk.expand_icon = true
 	btn_atk.disabled = not can_atk
 	btn_atk.pressed.connect(_cmd_attack)
 	list_vbox.add_child(btn_atk)
@@ -840,15 +884,15 @@ func _show_command_menu() -> void:
 			# 差一格的玩家最容易被骗：明确预告质变档（10 格破城门 / 20 格沿直线贯穿到底）
 			var cap: int = CombatCore.dragon_charge_cap(u.is_mounted())
 			if u.charge >= cap:
-				btn_skill.text = "✨ 龙斩(%d/%d) %s" % [u.charge, cap, "裂地千里!" if cap >= 20 else "劈山裂城!"]
+				btn_skill.text = "龙斩(%d/%d) %s" % [u.charge, cap, "裂地千里!" if cap >= 20 else "劈山裂城!"]
 			elif u.charge >= cap - 2:
-				btn_skill.text = "✨ 龙斩(%d/%d) ⚡再%d格质变" % [u.charge, cap, cap - u.charge]
+				btn_skill.text = "龙斩(%d/%d) ⚡再%d格质变" % [u.charge, cap, cap - u.charge]
 			else:
-				btn_skill.text = "✨ 龙斩(%d/%d)" % [u.charge, cap]
+				btn_skill.text = "龙斩(%d/%d)" % [u.charge, cap]
 		elif skill_id == "roar":
-			btn_skill.text = "✨ 咆哮·连点喊字%s" % ("" if ready else "(CD)")
+			btn_skill.text = "咆哮·连点喊字%s" % ("" if ready else "(CD)")
 		else:
-			btn_skill.text = "✨ %s%s" % [skill_name, "" if ready else "(CD)"]
+			btn_skill.text = "%s%s" % [skill_name, "" if ready else "(CD)"]
 		# 禁用原因直接写在按钮上 —— 别让玩家对着灰按钮猜为什么点不动
 		var has_target: bool = _has_skill_target(u, skill_id)
 		if not ready:
@@ -860,13 +904,19 @@ func _show_command_menu() -> void:
 			btn_skill.text += " ·无目标"
 			btn_skill.tooltip_text = _skill_no_target_hint(u, skill_id)
 		btn_skill.disabled = not ready or not has_target
+		btn_skill.name = "cmd_skill"     # 供自动化测试精确定位
+		btn_skill.icon = ICON_SKILL
+		btn_skill.expand_icon = true
 		btn_skill.pressed.connect(_cmd_skill)
 		list_vbox.add_child(btn_skill)
 
 	# 3. 待机休整
 	var btn_wait := Button.new()
 	btn_wait.custom_minimum_size = Vector2(136, 34)
-	btn_wait.text = "🛡️ 待机休整"
+	btn_wait.name = "cmd_wait"
+	btn_wait.text = "待机休整"
+	btn_wait.icon = ICON_DEF
+	btn_wait.expand_icon = true
 	btn_wait.pressed.connect(_cmd_wait)
 	list_vbox.add_child(btn_wait)
 
@@ -1621,124 +1671,142 @@ func _apply_events(events: Array) -> void:
 		elif etype == "damage" and not played_hit:
 			_play_sfx("hit")
 			played_hit = true
-		match ev.get("type"):
+		match etype:
 			"damage":
-				var t: BattleUnitScript = _unit_by_id(ev.target)
-				if t:
-					if t.iron_skin or int(ev.value) == 0:
-						_spawn_float_text(t.cell, "🛡️ 铁皮防弹！刀枪不入！", Color(0.9, 0.9, 0.95), true)
-						info_label.text += "\n%s 处于防弹铁皮状态！物理伤害判定为 0！" % t.name
-						continue
-					_flash_unit(t.id, Color(1, 0.3, 0.3))
-					_unit_bounce(t.id)
-					var is_crit: bool = ev.get("crit", false) or int(ev.get("value", 0)) >= 50
-					var dmg_str: String = ("💥暴击 -%d" if is_crit else "-%d") % ev.value
-					var dmg_col: Color = Color(1.0, 0.85, 0.2) if is_crit else Color(1, 0.4, 0.3)
-					info_label.text += "\n%s 受到 %d 伤害！" % [t.name, ev.value]
-
-					# 关羽千里逃窜蓄力被打断机制（契合原著小说：受击气脉震散，全部清零）
-					# 例外：骑赵云时赵云会硬扛第一击（原著里赵云扛着关羽狂奔，敌人追不上）
-					if t.id == "guanyu" and t.charge > 0:
-						if t.is_mounted() and not t.dragon_guard_used:
-							t.dragon_guard_used = true
-							_spawn_float_text(t.cell, "🐎 赵云硬扛！青龙蓄力未散！", Color(0.5, 1.0, 0.85), true)
-							info_label.text += "\n赵云替关羽挡下这一击，气脉未散！（合体护航每关仅一次）"
-						else:
-							t.charge = 0
-							_spawn_float_text(t.cell, "💥 气脉震散！蓄力清零(归0)！", Color(1.0, 0.25, 0.25), true)
-							info_label.text += "\n关羽遭敌截击气脉震散！青龙蓄力全部清零！快派大哥三弟挡刀！"
-							_sync_text(t)
-
-					# 昌豨怯战：受击后DEF-30%
-					if "feigui" in t.skill_ids and not t.coward_debuff:
-						t.coward_debuff = true
-						info_label.text += "\n昌豨胆怯了！防御下降！"
+				_apply_damage_event(ev)
 			"death":
-				var t2 := _unit_by_id(ev.target)
-				if t2:
-					# 主将被击杀：大招仪式感（震屏+闪光+大字）
-					if t2.is_commander:
-						_big_moment("%s 被击败！！" % t2.name)
-					else:
-						_spawn_banner("%s 溃散！" % t2.name, Color(0.9, 0.2, 0.2))
-						_spawn_burst(t2.cell, Color(0.9, 0.2, 0.2, 0.5), 1)
-					_unit_node_hide(t2.id)
-					info_label.text += "\n%s 阵亡！" % t2.name
-					# 动态士气结算（滚雪球：己方每倒一人都在给对面加码）
-					if t2.camp == "enemy":
-						if t2.is_commander:
-							_adjust_morale(25, -40)
-						else:
-							_adjust_morale(12, -10)
-					elif t2.camp == "player":
-						_adjust_morale(-12, 10)
-					# 吕布暴怒：我方单位倒下，吕布越战越狂（多打少）
-					if t2.camp == "player" and chapter_id == "chapter2":
-						var lubu := _unit_by_id("lubu")
-						if lubu and lubu.alive:
-							lubu.add_rage()
-							info_label.text += "\n吕布暴怒！攻击力暴涨！(×1.5)"
-							_play_dialog("ch2_lubu_rage")
-					# 华雄「虎牢狂力」：斩将叠层（原著：华雄连斩联军数将，越战越勇）
-					if t2.camp == "player":
-						_on_player_unit_killed(t2)
-			"iron_skin":
-				var tar := _unit_by_id(ev.target)
-				if tar:
-					_spawn_float_text(tar.cell, "🛡️ 铁皮防弹！刀枪不入！", Color(1.0, 0.85, 0.2), true)
-					_spawn_banner("吕布进入【两息铁皮状态】！刀枪不入！", Color(1.0, 0.85, 0.2))
-					_shake_camera(8.0)
-					info_label.text += "\n吕布连击大成进入两息铁皮状态！物理攻击全部无效！唯有张飞战吼能震破其气脉！"
-			"iron_skin_block":
-				var tar := _unit_by_id(ev.target)
-				if tar:
-					_spawn_float_text(tar.cell, "🛡️ 铁皮防弹！免疫伤害！", Color(0.9, 0.9, 0.95), true)
-					info_label.text += "\n攻击斩在防弹铁皮上火星四溅！无法破防！伤害为 0！"
-			"iron_skin_break":
-				var tar := _unit_by_id(ev.target)
-				if tar:
-					_spawn_float_text(tar.cell, "💥 铁皮震破！气脉散乱！", Color(1.0, 0.3, 0.3), true)
-					info_label.text += "\n张飞战吼震破了吕布的铁皮气罩！吕布连击与无敌尽散！"
-			"skill":
-				info_label.text += "\n【技能】%s" % ev.get("value", "")
-				if ev.get("fx") == "fire_homing_arrow":
-					var arr: Dictionary = ev.get("arrow", {})
-					_spawn_homing_arrow_node(arr)
-				elif ev.get("fx") == "arrow_hit":
-					var t_hit: BattleUnitScript = _unit_by_id(ev.target)
-					if t_hit:
-						_spawn_float_text(t_hit.cell, "💥 飞弹破空命中！", Color(0.4, 0.9, 1.0), true)
-						_spawn_burst(t_hit.cell, Color(0.4, 0.9, 1.0, 0.6), 2)
-			"stun":
-				var tar := _unit_by_id(ev.target)
-				if tar:
-					_spawn_float_text(tar.cell, "眩晕！", Color(0.9, 0.8, 0.2))
-					_spawn_shockwave(tar.cell, Color(0.9, 0.8, 0.2, 0.6))
-					# 连携提示：控住=集火窗口
-					_spawn_banner("%s 被控住！快集火！" % tar.name, Color(0.9, 0.8, 0.2))
-				info_label.text += "\n%s 被眩晕 %d 回合！" % [_unit_by_id(ev.target).name, ev.turns]
-				# 许褚/吕布被眩晕时解除连击/裸衣（打断）
-				var stunned := _unit_by_id(ev.target)
-				if stunned:
-					if "lubu_fangtian" in stunned.skill_ids:
-						stunned.fangtian_reset()
-			"armor_broken":
-				var ab := _unit_by_id(ev.target)
-				if ab:
-					info_label.text += "\n%s 铠甲被爆！防御减半！（只剩裤衩子…）" % ab.name
-			"exhausted":
-				var exh := _unit_by_id(ev.target)
-				if exh:
-					_spawn_float_text(exh.cell, "⚡ 铁锤沉重！力竭脱力！", Color(0.95, 0.65, 0.2))
-					info_label.text += "\n%s 挥出沉重铁锤全力猛击！陷入 1 回合力竭脱力（DEF-30%）！" % exh.name
-			"heal":
-				var he := _unit_by_id(ev.target)
-				if he:
-					info_label.text += "\n%s 吸血恢复 %d HP！" % [he.name, ev.value]
-			"fx":
-				if ev.fx == "dragon_full_screen":
-					if ev.get("shatter_gate", false):
-						_break_sishui_gate()
+				_apply_death_event(ev)
+			_:
+				_apply_state_event(ev)
+
+
+## 伤害事件：闪红、弹跳、暴击判定、关羽蓄力被打断、昌豨怯战
+func _apply_damage_event(ev: Dictionary) -> void:
+	var t: BattleUnitScript = _unit_by_id(ev.target)
+	if t:
+		if t.iron_skin or int(ev.value) == 0:
+			_spawn_float_text(t.cell, "🛡️ 铁皮防弹！刀枪不入！", Color(0.9, 0.9, 0.95), true)
+			info_label.text += "\n%s 处于防弹铁皮状态！物理伤害判定为 0！" % t.name
+			return
+		_flash_unit(t.id, Color(1, 0.3, 0.3))
+		_unit_bounce(t.id)
+		var is_crit: bool = ev.get("crit", false) or int(ev.get("value", 0)) >= 50
+		var dmg_str: String = ("💥暴击 -%d" if is_crit else "-%d") % ev.value
+		var dmg_col: Color = Color(1.0, 0.85, 0.2) if is_crit else Color(1, 0.4, 0.3)
+		info_label.text += "\n%s 受到 %d 伤害！" % [t.name, ev.value]
+
+		# 关羽千里逃窜蓄力被打断机制（契合原著小说：受击气脉震散，全部清零）
+		# 例外：骑赵云时赵云会硬扛第一击（原著里赵云扛着关羽狂奔，敌人追不上）
+		if t.id == "guanyu" and t.charge > 0:
+			if t.is_mounted() and not t.dragon_guard_used:
+				t.dragon_guard_used = true
+				_spawn_float_text(t.cell, "🐎 赵云硬扛！青龙蓄力未散！", Color(0.5, 1.0, 0.85), true)
+				info_label.text += "\n赵云替关羽挡下这一击，气脉未散！（合体护航每关仅一次）"
+			else:
+				t.charge = 0
+				_spawn_float_text(t.cell, "💥 气脉震散！蓄力清零(归0)！", Color(1.0, 0.25, 0.25), true)
+				info_label.text += "\n关羽遭敌截击气脉震散！青龙蓄力全部清零！快派大哥三弟挡刀！"
+				_sync_text(t)
+
+		# 昌豨怯战：受击后DEF-30%
+		if "feigui" in t.skill_ids and not t.coward_debuff:
+			t.coward_debuff = true
+			info_label.text += "\n昌豨胆怯了！防御下降！"
+
+
+## 阵亡事件：溃散演出、士气结算（滚雪球）、吕布暴怒、华雄斩将叠层
+func _apply_death_event(ev: Dictionary) -> void:
+	var t2 := _unit_by_id(ev.target)
+	if t2:
+		# 主将被击杀：大招仪式感（震屏+闪光+大字）
+		if t2.is_commander:
+			_big_moment("%s 被击败！！" % t2.name)
+		else:
+			_spawn_banner("%s 溃散！" % t2.name, Color(0.9, 0.2, 0.2))
+			_spawn_burst(t2.cell, Color(0.9, 0.2, 0.2, 0.5), 1)
+		_unit_node_hide(t2.id)
+		info_label.text += "\n%s 阵亡！" % t2.name
+		# 动态士气结算（滚雪球：己方每倒一人都在给对面加码）
+		if t2.camp == "enemy":
+			if t2.is_commander:
+				_adjust_morale(25, -40)
+			else:
+				_adjust_morale(12, -10)
+		elif t2.camp == "player":
+			_adjust_morale(-12, 10)
+		# 吕布暴怒：我方单位倒下，吕布越战越狂（多打少）
+		if t2.camp == "player" and chapter_id == "chapter2":
+			var lubu := _unit_by_id("lubu")
+			if lubu and lubu.alive:
+				lubu.add_rage()
+				info_label.text += "\n吕布暴怒！攻击力暴涨！(×1.5)"
+				_play_dialog("ch2_lubu_rage")
+		# 华雄「虎牢狂力」：斩将叠层（原著：华雄连斩联军数将，越战越勇）
+		if t2.camp == "player":
+			_on_player_unit_killed(t2)
+
+
+## 状态类事件：铁皮无敌、眩晕、破甲、力竭、吸血、技能特效
+func _apply_state_event(ev: Dictionary) -> void:
+	match str(ev.get("type", "")):
+		"iron_skin":
+			var tar := _unit_by_id(ev.target)
+			if tar:
+				_spawn_float_text(tar.cell, "🛡️ 铁皮防弹！刀枪不入！", Color(1.0, 0.85, 0.2), true)
+				_spawn_banner("吕布进入【两息铁皮状态】！刀枪不入！", Color(1.0, 0.85, 0.2))
+				_shake_camera(8.0)
+				info_label.text += "\n吕布连击大成进入两息铁皮状态！物理攻击全部无效！唯有张飞战吼能震破其气脉！"
+		"iron_skin_block":
+			var tar := _unit_by_id(ev.target)
+			if tar:
+				_spawn_float_text(tar.cell, "🛡️ 铁皮防弹！免疫伤害！", Color(0.9, 0.9, 0.95), true)
+				info_label.text += "\n攻击斩在防弹铁皮上火星四溅！无法破防！伤害为 0！"
+		"iron_skin_break":
+			var tar := _unit_by_id(ev.target)
+			if tar:
+				_spawn_float_text(tar.cell, "💥 铁皮震破！气脉散乱！", Color(1.0, 0.3, 0.3), true)
+				info_label.text += "\n张飞战吼震破了吕布的铁皮气罩！吕布连击与无敌尽散！"
+		"skill":
+			info_label.text += "\n【技能】%s" % ev.get("value", "")
+			if ev.get("fx") == "fire_homing_arrow":
+				var arr: Dictionary = ev.get("arrow", {})
+				_spawn_homing_arrow_node(arr)
+			elif ev.get("fx") == "arrow_hit":
+				var t_hit: BattleUnitScript = _unit_by_id(ev.target)
+				if t_hit:
+					_spawn_float_text(t_hit.cell, "💥 飞弹破空命中！", Color(0.4, 0.9, 1.0), true)
+					_spawn_burst(t_hit.cell, Color(0.4, 0.9, 1.0, 0.6), 2)
+		"stun":
+			var tar := _unit_by_id(ev.target)
+			if tar:
+				_spawn_float_text(tar.cell, "眩晕！", Color(0.9, 0.8, 0.2))
+				_spawn_shockwave(tar.cell, Color(0.9, 0.8, 0.2, 0.6))
+				# 连携提示：控住=集火窗口
+				_spawn_banner("%s 被控住！快集火！" % tar.name, Color(0.9, 0.8, 0.2))
+			info_label.text += "\n%s 被眩晕 %d 回合！" % [_unit_by_id(ev.target).name, ev.turns]
+			# 许褚/吕布被眩晕时解除连击/裸衣（打断）
+			var stunned := _unit_by_id(ev.target)
+			if stunned:
+				if "lubu_fangtian" in stunned.skill_ids:
+					stunned.fangtian_reset()
+		"armor_broken":
+			var ab := _unit_by_id(ev.target)
+			if ab:
+				info_label.text += "\n%s 铠甲被爆！防御减半！（只剩裤衩子…）" % ab.name
+		"exhausted":
+			var exh := _unit_by_id(ev.target)
+			if exh:
+				_spawn_float_text(exh.cell, "⚡ 铁锤沉重！力竭脱力！", Color(0.95, 0.65, 0.2))
+				info_label.text += "\n%s 挥出沉重铁锤全力猛击！陷入 1 回合力竭脱力（DEF-30%）！" % exh.name
+		"heal":
+			var he := _unit_by_id(ev.target)
+			if he:
+				info_label.text += "\n%s 吸血恢复 %d HP！" % [he.name, ev.value]
+		"fx":
+			if ev.fx == "dragon_full_screen":
+				if ev.get("shatter_gate", false):
+					_break_sishui_gate()
+
 
 func _flash_unit(id: String, color: Color) -> void:
 	var node: Node2D = unit_nodes.get(id)
@@ -1847,151 +1915,15 @@ func _screen_flash(color: Color, duration: float = 0.25) -> void:
 
 ## 千里·青龙横贯：多层碧霄龙刃辉光 + 爆破龙鳞 + 冲击新星（支持多阶青龙形态）
 func _spawn_dragon(from_cell: Vector2i, to_cell: Vector2i, charge: int = 10) -> void:
-	var dt: Dictionary = CombatCore.dragon_charge_tier(charge)
-	var max_w: float = dt.get("width", 110.0)
-	var start_px := _cell_to_px(from_cell)
-	var end_px := _cell_to_px(to_cell)
-	var dir := (end_px - start_px).normalized()
-	var dist := start_px.distance_to(end_px)
-
-	var beam_root := Node2D.new()
-	beam_root.z_index = 40
-	unit_root.add_child(beam_root)
-
-	# 1. 外层青龙破空气流（满蓄力宽达 120px）
-	var outer_line := Line2D.new()
-	outer_line.points = PackedVector2Array([start_px, end_px])
-	outer_line.width = max_w
-	outer_line.default_color = Color(0.15, 0.95, 0.5, 0.45)
-	outer_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	outer_line.end_cap_mode = Line2D.LINE_CAP_ROUND
-	beam_root.add_child(outer_line)
-
-	# 2. 中层天青龙气巨柱
-	var mid_line := Line2D.new()
-	mid_line.points = PackedVector2Array([start_px, end_px])
-	mid_line.width = max_w * 0.48
-	mid_line.default_color = Color(0.35, 1.0, 0.7, 0.9)
-	mid_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	mid_line.end_cap_mode = Line2D.LINE_CAP_ROUND
-	beam_root.add_child(mid_line)
-
-	# 3. 内层白炽贯穿核
-	var core_line := Line2D.new()
-	core_line.points = PackedVector2Array([start_px, end_px])
-	core_line.width = max(max_w * 0.16, 10.0)
-	core_line.default_color = Color(1.0, 1.0, 0.95, 1.0)
-	core_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	core_line.end_cap_mode = Line2D.LINE_CAP_ROUND
-	beam_root.add_child(core_line)
-
-	# 4. 沿斩击路径排列的青龙刃鳞
-	var step_count := int(dist / 28.0)
-	for i in range(step_count):
-		var t := float(i) / float(max(step_count, 1))
-		var pos := start_px + dir * dist * t
-		var scale_poly := Polygon2D.new()
-		scale_poly.polygon = PackedVector2Array([
-			Vector2(-14, -8), Vector2(14, 0), Vector2(-14, 8), Vector2(-8, 0)
-		])
-		scale_poly.position = pos
-		scale_poly.rotation = dir.angle()
-		scale_poly.color = Color(0.4, 1.0, 0.75, 0.75)
-		beam_root.add_child(scale_poly)
-
-	# 5. 目标爆破新星
-	var nova := Polygon2D.new()
-	nova.polygon = _make_circle_polygon(38.0, 16)
-	nova.position = end_px
-	nova.color = Color(0.65, 1.0, 0.85, 0.9)
-	beam_root.add_child(nova)
-
-	# 6. 动画演播与渐隐
-	var tw := create_tween()
-	tw.parallel().tween_property(outer_line, "width", 68.0, 0.35)
-	tw.parallel().tween_property(mid_line, "width", 32.0, 0.35)
-	tw.parallel().tween_property(nova, "scale", Vector2(2.4, 2.4), 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(beam_root, "modulate:a", 0.0, 0.4).set_delay(0.12)
-	tw.tween_callback(beam_root.queue_free)
-
+	BattleVfxCore.spawn_dragon(unit_root, _cell_to_px(from_cell), _cell_to_px(to_cell), charge)
 	_shake_camera(12.0)
 	_screen_flash(Color(0.2, 1.0, 0.6, 0.35), 0.3)
 
-## 常山·七进七出：交错极速银枪贯穿破阵
 func _spawn_seven_dash(from_cell: Vector2i, to_cell: Vector2i, weaves: int) -> void:
-	var start_px := _cell_to_px(from_cell)
-	var target_px := _cell_to_px(to_cell)
-	var dash_root := Node2D.new()
-	dash_root.z_index = 45
-	unit_root.add_child(dash_root)
-
-	var count: int = clampi(weaves, 3, 7)
-	for i in range(count):
-		var delay: float = float(i) * 0.05
-		var angle_offset: float = (float(i) - float(count) / 2.0) * 0.42
-		var base_dir := (target_px - start_px).normalized()
-		if base_dir.length_squared() < 0.1:
-			base_dir = Vector2.RIGHT
-		var slash_dir := base_dir.rotated(angle_offset)
-		var p1 := target_px - slash_dir * 45.0
-		var p2 := target_px + slash_dir * 52.0
-
-		var spear_line := Line2D.new()
-		spear_line.points = PackedVector2Array([p1, p1])
-		spear_line.width = 10.0 if i == count - 1 else 6.0
-		spear_line.default_color = Color(0.92, 0.97, 1.0, 0.95) if (i % 2 == 0) else Color(0.35, 0.8, 1.0, 0.9)
-		spear_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
-		spear_line.end_cap_mode = Line2D.LINE_CAP_ROUND
-		spear_line.modulate.a = 0.0
-		dash_root.add_child(spear_line)
-
-		var head := Polygon2D.new()
-		head.polygon = PackedVector2Array([
-			Vector2(14, 0), Vector2(-7, -5), Vector2(-2, 0), Vector2(-7, 5)
-		])
-		head.color = Color(1.0, 1.0, 1.0, 0.95)
-		head.position = p1
-		head.rotation = slash_dir.angle()
-		head.modulate.a = 0.0
-		dash_root.add_child(head)
-
-		var tw := create_tween()
-		tw.tween_interval(delay)
-		tw.tween_callback(func():
-			spear_line.modulate.a = 1.0
-			head.modulate.a = 1.0
-		)
-		tw.parallel().tween_method(func(val: Vector2):
-			spear_line.points = PackedVector2Array([p1, val])
-			head.position = val
-		, p1, p2, 0.08)
-		tw.parallel().tween_property(spear_line, "width", 1.5, 0.12).set_delay(0.04)
-		tw.parallel().tween_property(spear_line, "modulate:a", 0.0, 0.15).set_delay(0.07)
-		tw.parallel().tween_property(head, "modulate:a", 0.0, 0.15).set_delay(0.07)
-
-	var finish_delay: float = float(count) * 0.05
-	var shock := Polygon2D.new()
-	shock.polygon = _make_circle_polygon(34.0, 16)
-	shock.position = target_px
-	shock.color = Color(0.65, 0.88, 1.0, 0.85)
-	shock.scale = Vector2(0.2, 0.2)
-	shock.modulate.a = 0.0
-	dash_root.add_child(shock)
-
-	var tw_fin := create_tween()
-	tw_fin.tween_interval(finish_delay)
-	tw_fin.tween_callback(func():
-		shock.modulate.a = 0.85
-		_shake_camera(7.0)
-	)
-	tw_fin.tween_property(shock, "scale", Vector2(2.0, 2.0), 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw_fin.parallel().tween_property(shock, "modulate:a", 0.0, 0.22)
-	tw_fin.tween_property(dash_root, "modulate:a", 0.0, 0.18)
-	tw_fin.tween_callback(dash_root.queue_free)
-
+	BattleVfxCore.spawn_seven_dash(unit_root, _cell_to_px(from_cell), _cell_to_px(to_cell), weaves,
+		Callable(self, "_shake_camera"))
 	_screen_flash(Color(0.5, 0.85, 1.0, 0.35), 0.25)
 
-## 音波圈：从中心扩散的多层圆环（咆哮/范围技）
 func _spawn_shockwave(cell: Vector2i, color: Color) -> void:
 	for rad in [1.2, 1.8, 2.4]:
 		var ring := Polygon2D.new()

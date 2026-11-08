@@ -7,19 +7,21 @@ extends RefCounted
 ## 这样它既能在战斗场景用，也能在编辑器预览/测试里单独调。
 
 const TILE_GROUND := preload("res://assets/tiles/ground.png")
+const TILE_GROUND_FIRE := preload("res://assets/tiles/ground_fire.png")
 const TILE_STONE := preload("res://assets/tiles/stone.png")
 const TILE_WALL := preload("res://assets/tiles/wall.png")
 const TILE_GATE := preload("res://assets/tiles/gate.png")
 
 
 ## 一整张连续地面 + 极淡格线
-static func draw_grid(grid_node: Node, offset: Vector2, tile: float, w: int, h: int) -> void:
+## variant: "grass"（默认）/ "fire"（洛阳火场）
+static func draw_grid(grid_node: Node, offset: Vector2, tile: float, w: int, h: int, variant: String = "grass") -> void:
 	for c in grid_node.get_children():
 		c.queue_free()
 
 	var ground := TextureRect.new()
 	ground.name = "Ground"
-	ground.texture = TILE_GROUND
+	ground.texture = TILE_GROUND_FIRE if variant == "fire" else TILE_GROUND
 	ground.stretch_mode = TextureRect.STRETCH_SCALE
 	ground.size = Vector2(w * tile, h * tile)
 	ground.position = offset
@@ -57,7 +59,7 @@ static func draw_hills(map_root: Node2D, hills: Array, offset: Vector2, tile: fl
 
 
 ## 障碍物（寨墙 / 关门）。返回 {Vector2i: Node2D}，调用方存起来做后续判定。
-static func draw_obstacles(map_root: Node2D, obstacles: Array, offset: Vector2, tile: float) -> Dictionary:
+static func draw_obstacles(map_root: Node2D, obstacles: Array, offset: Vector2, tile: float, variant: String = "grass") -> Dictionary:
 	var nodes: Dictionary = {}
 	for o in obstacles:
 		var pos := Vector2i(int(o.get("x", 0)), int(o.get("y", 0)))
@@ -79,6 +81,8 @@ static func draw_obstacles(map_root: Node2D, obstacles: Array, offset: Vector2, 
 		tex_rect.size = Vector2(tile - 6.0, tile - 6.0)
 		tex_rect.position = Vector2(-tile * 0.5 + 3.0, -tile * 0.5 + 3.0)
 		tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if variant == "fire":
+			tex_rect.modulate = Color(0.52, 0.40, 0.33)   # 火场里寨墙烧成焦黑
 		root.add_child(tex_rect)
 
 		var lbl := Label.new()
