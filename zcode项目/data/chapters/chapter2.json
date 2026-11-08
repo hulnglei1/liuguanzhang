@@ -101,7 +101,8 @@
                 "by": "lubu",
                 "mult": 3.0,
                 "hp_floor_ratio": 0.3,
-                "exhausted_turns": 3
+                "exhausted_turns": 3,
+                "retire": true
             }
         },
         {

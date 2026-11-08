@@ -67,31 +67,40 @@ func _run() -> void:
 	_check(wu.hp == hp0, "第 1 回合不触发（狂暴事件在第 3 回合）")
 	_check(not wu.exhausted, "第 1 回合不脱力")
 
-	# ---------- 2. 第 3 回合触发：真实扣血 + 脱力 ----------
+	# ---------- 2. 第 3 回合触发：真实扣血 + 当场退场 ----------
 	print("\n---- 2. 第 3 回合「武安国被打飞」----")
 	var hp_before: int = wu.hp
 	var def_before: int = wu.effective_def()
+	var alive_before: int = b._camp_units("player").size()
 	b.turn_state.turn = 3
 	b._check_turn_events()
 	await _wait(0.6)
-	print("  HP %d → %d，DEF %d → %d，exhausted=%s，剩余 %d 回合" % [
-		hp_before, wu.hp, def_before, wu.effective_def(), str(wu.exhausted), wu.exhausted_turns])
-	_check(wu.alive, "武安国没被剧情直接打死（原著是吐血脱力，不是阵亡）")
+	print("  HP %d → %d，DEF %d → %d，alive=%s，我方人数 %d → %d" % [
+		hp_before, wu.hp, def_before, wu.effective_def(), str(wu.alive),
+		alive_before, b._camp_units("player").size()])
 	_check(wu.hp < hp_before, "剧情触发时真实扣血（血条会动，不再是满血站着）")
-	_check(wu.exhausted and wu.exhausted_turns == 3, "进入 3 回合脱力状态")
-	_check(wu.effective_def() < def_before, "DEF 因脱力真实下降（%d → %d）" % [def_before, wu.effective_def()])
+	_check(not wu.alive, "被打飞后当场退场（本关不再参战）—— 引用原著「被亲兵抬下去」")
+	_check(b._camp_units("player").size() == alive_before - 1, "我方在列人数 -1")
+	_check(wu.hp >= int(ceil(float(wu.max_hp) * 0.3)), "留有保底血量（不是被打成 0 血）")
 
-	var floor_hp: int = int(ceil(float(wu.max_hp) * 0.3))
-	_check(wu.hp >= floor_hp, "留有保底血量（应 ≥%d，实际 %d）" % [floor_hp, wu.hp])
-
-	# ---------- 3. 残血保底：不能被打死 ----------
-	print("\n---- 3. 残血保底（防剧情把单位打死）----")
+	# ---------- 3. 保底逻辑仍然有效（复活后再打一次，不带 retire）----------
+	print("\n---- 3. 残血保底（防剧情把单位打成 0 血）----")
+	wu.alive = true
 	wu.hp = 5
 	b._apply_event_effect({"kind": "smash_unit", "target": "wuanguo", "by": "lubu",
 		"mult": 3.0, "hp_floor_ratio": 0.3, "exhausted_turns": 3})
 	await _wait(0.3)
 	print("  HP 5 → %d" % wu.hp)
-	_check(wu.alive, "残血时剧情也只脱力、不致死")
+	_check(wu.alive, "不带 retire 时，保底逻辑保证不被打死")
+
+	# ---------- 4. 退场不触发阵亡连锁 ----------
+	print("\n---- 4. 退场 ≠ 阵亡（不能触发士气结算/华雄叠层）----")
+	var morale_before: int = int(b.morale.get("player", 100))
+	b._retire_unit(wu)
+	await _wait(0.3)
+	_check(int(b.morale.get("player", 100)) == morale_before,
+		"退场不扣我方士气（%d 保持不变）" % morale_before)
+	_check(not wu.alive, "退场后 alive = false")
 
 	# ---------- 4. 脱力到期自动解除 ----------
 	print("\n---- 4. 脱力回合数递减 ----")
@@ -105,6 +114,8 @@ func _run() -> void:
 
 	# ---------- 5. 挥锤脱力仍是 1 回合（回归：旧机制不能被破坏） ----------
 	print("\n---- 5. 武安国挥锤脱力（原有机制回归）----")
+	wu.alive = true
+	wu.hp = wu.max_hp
 	wu.exhausted = false
 	wu.exhausted_turns = 0
 	var dao = b._unit_by_id("li_bu_fu_1")

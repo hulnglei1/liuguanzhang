@@ -1651,6 +1651,8 @@ func _execute_roar(words: int) -> void:
 			if allies.size() > 0:
 				_spawn_float_text(u.cell, "⚠️ 声浪太猛，自己人也遭殃！", Color(1.0, 0.5, 0.4), true)
 	var events: Array = SkillsCore.do_roar(u, targets, words, allies)
+	# 原著：两次燕人咆哮消耗的能量太多 → 喊得越长，冷却越久
+	u.start_cd("roar", 5 if full else 3)
 	u.acted = true
 	move_origin_cell = Vector2i(-1, -1)
 	move_gained_charge = 0
@@ -2380,6 +2382,29 @@ func _apply_event_effect(fx: Dictionary) -> void:
 				info_label.text += "\n%s 被吕布第三击轰飞！吐血脱力 %d 回合（DEF-30%%）！" % [victim.name, turns]
 			else:
 				info_label.text += "\n%s 已是强弩之末，只脱力不扣血。" % victim.name
+			# retire: true → 扣完血当场被抬走（原著"吐血脱力，被亲兵抬下去"）
+			if bool(fx.get("retire", false)):
+				_retire_unit(victim)
+		"retire_unit":
+			var v: BattleUnitScript = _unit_by_id(str(fx.get("target", "")))
+			if v != null:
+				_retire_unit(v)
+
+## 剧情性退场：被打飞后由亲兵抬走，本关不再参战。
+## ⚠ 刻意**不发 death 事件** —— 他不是战死，不能触发阵亡士气结算、华雄斩将叠层、吕布暴怒这一串连带反应。
+func _retire_unit(v: BattleUnitScript) -> void:
+	if v == null or not v.alive:
+		return
+	v.hp = maxi(1, int(v.hp))
+	v.alive = false
+	if selected_id == v.id:
+		_cancel_input()
+	_unit_node_hide(v.id)
+	_spawn_banner("%s 重伤退场！" % v.name, Color(0.9, 0.5, 0.3))
+	_spawn_burst(v.cell, Color(0.9, 0.5, 0.3, 0.5), 1)
+	info_label.text += "\n%s 吐血脱力，被亲兵抬下战场（本关不再参战）！" % v.name
+	_update_dashboard()
+
 
 func _play_dialog(key: String) -> void:
 	var actual_key := key
