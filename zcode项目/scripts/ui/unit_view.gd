@@ -170,6 +170,8 @@ static func create_arrow_node(from_px: Vector2, to_px: Vector2) -> Node2D:
 	node.name = "Arrow"
 	node.position = from_px
 	node.z_index = 70
+	# 放大 1.35 倍：天上的箭要多、要看得见，"满屏飞弹"的观感才成立
+	node.scale = Vector2(1.35, 1.35)
 	var dir: Vector2 = to_px - from_px
 	if dir.length() > 0.01:
 		node.rotation = dir.angle()
@@ -180,7 +182,7 @@ static func create_arrow_node(from_px: Vector2, to_px: Vector2) -> Node2D:
 		Vector2(-22, -1.2), Vector2(-6, -7.0), Vector2(16, -8.0),
 		Vector2(22, 0), Vector2(16, 8.0), Vector2(-6, 7.0), Vector2(-22, 1.2),
 	])
-	glow.color = Color(0.35, 0.8, 1.0, 0.22)
+	glow.color = Color(0.40, 0.85, 1.0, 0.34)   # 青光加强，飞行中更醒目
 	node.add_child(glow)
 
 	# 两片尾羽

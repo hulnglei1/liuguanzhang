@@ -34,7 +34,9 @@ const SKILL_META := {
 	},
 	"arrow_rain": {
 		"name": "回旋飞弹", "cd": 0, "charge_type": "none",
-		"max_charge": 0, "desc": "公孙瓒：全图超远视距锁定，发射定速追踪飞弹（每回合推进3格）",
+		"max_charge": 0,
+		"desc": "公孙瓒：一次连射 2 支慢速跟踪箭（每回合只推进 1 格、会拐弯）。"
+			+ "原著里他能把天上射满箭、从任何方向绕过来命中——慢，但躲不掉。",
 	},
 	"naked_armor": {
 		"name": "裸衣死战", "cd": 4, "charge_type": "none",
@@ -216,17 +218,10 @@ static func do_lubu_attack(caster, target) -> Array:
 	return ev
 
 ## 公孙瓒·回旋飞弹：发射定速追踪飞弹（每回合推进 3 格，全图索敌，CD=0）
+## 一次施放连射 2 支（原著"连射数箭、犹如人形防空炮"）。
+## 速度 1 格/回合 —— "唯一的缺点就是箭矢速度偏慢"，慢才有天空中攒箭的观感。
 static func do_arrow_rain(caster, target, all_units: Array = []) -> Array:
 	var dist: int = GridCore.chebyshev(caster.cell, target.cell)
-	var arrow := {
-		"id": "arrow_%d" % [randi() % 100000 + 1],
-		"caster_id": caster.id,
-		"target_id": target.id,
-		"cell": caster.cell,
-		"target_cell": target.cell,
-		"speed": 3,
-		"atk": caster.effective_atk()
-	}
 	caster.start_cd("arrow_rain", meta("arrow_rain").cd)
 	
 	# 贴身（相邻 1 格）才当回合直达命中；
@@ -243,10 +238,40 @@ static func do_arrow_rain(caster, target, all_units: Array = []) -> Array:
 			ev.append({"type": "death", "target": target.id})
 		return ev
 	
-	# 若目标较远，生成在空中的定速追踪飞弹实体事件（由战场主控/循环逐回合推进）
-	return [
-		{"type": "skill", "skill_id": "arrow_rain", "caster": caster.id, "fx": "fire_homing_arrow", "arrow": arrow, "target": target.id}
-	]
+	# 选射击对象：主目标 + 另一个最近的敌人（没有就两支都打主目标）
+	var picks: Array = [target]
+	var best = null
+	var best_d: int = 999
+	for u in all_units:
+		if u == null or not u.alive or u.id == target.id:
+			continue
+		if u.camp == caster.camp:
+			continue
+		var d: int = GridCore.chebyshev(caster.cell, u.cell)
+		if d < best_d:
+			best_d = d
+			best = u
+	if best != null:
+		picks.append(best)
+
+	var evs: Array = []
+	for t in picks:
+		evs.append({
+			"type": "skill", "skill_id": "arrow_rain", "caster": caster.id,
+			"fx": "fire_homing_arrow",
+			"arrow": {
+				"id": "arrow_%d" % [randi() % 100000 + 1],
+				"caster_id": caster.id,
+				"target_id": t.id,
+				"cell": caster.cell,
+				"target_cell": t.cell,
+				"speed": 1,          # 每回合只推进 1 格：慢到能看清它拐弯
+				"mult": 0.6,         # 单支伤害下调，靠"多支+绕后"取胜
+				"atk": caster.effective_atk()
+			},
+			"target": t.id
+		})
+	return evs
 
 ## 更新战场上所有正在飞行追击的飞弹（每回合推进 3 格）
 ## 返回本轮产生的事件（包括飞弹移动、命中伤害、目标死亡等）
@@ -273,8 +298,8 @@ static func advance_homing_arrows(active_arrows: Array, all_units: Array, map_w:
 		var dist: int = GridCore.chebyshev(cur_pos, target_pos)
 		
 		# 若当前距离 <= 飞弹速度(3格)，本回合直接飞达并命中目标
-		if dist <= arr.get("speed", 3):
-			var dmg: int = CombatCore.damage(arr.get("atk", 20), 1.0, target.effective_def())
+		if dist <= arr.get("speed", 1):
+			var dmg: int = CombatCore.damage(arr.get("atk", 20), float(arr.get("mult", 1.0)), target.effective_def())
 			target.take_damage(dmg)
 			events.append({
 				"type": "arrow_hit", "arrow_id": arr.get("id"),

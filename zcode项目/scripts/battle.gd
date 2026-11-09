@@ -2008,7 +2008,14 @@ func _play_unit_attack_anim(attacker_id: String, target_cell: Vector2i) -> void:
 	UnitViewCore.play_attack(node, _cell_to_px(target_cell))
 
 ## 生成在空中定速飞行的回旋飞弹视觉节点
+## 同时在场飞弹上限（原著"把箭篓的箭射光"；也避免节点无限堆积）
+const MAX_ARROWS_IN_FLIGHT := 8
+
+
 func _spawn_homing_arrow_node(arr: Dictionary) -> void:
+	if active_arrows.size() >= MAX_ARROWS_IN_FLIGHT:
+		info_label.text += "\n🏹 箭篓空了！天上已有 %d 支飞弹在绕。" % active_arrows.size()
+		return
 	active_arrows.append(arr)
 	# 视觉（箭头 + 箭杆 + 尾羽）全部在 scripts/ui/unit_view.gd，机制侧只负责挂载
 	var node: Node2D = UnitViewCore.create_arrow_node(_cell_to_px(arr.cell), _cell_to_px(arr.target_cell))
