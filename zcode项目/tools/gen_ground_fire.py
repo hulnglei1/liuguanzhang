@@ -1,13 +1,13 @@
 """生成"火场"地面变体（洛阳大火专用）：焦土 + 炭化裂缝 + 余烬。
 
-与草地版同样是**一整张连续图**（1248×1040），保证格与格之间无缝。
+与草地版同样是**一整张连续图**（2496×1456），保证格与格之间无缝。
 """
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-W, H = 1248, 1040
+W, H = 2496, 1456   # 24x14 棋盘 @2x
 OUT = Path(__file__).resolve().parents[1] / "assets" / "tiles"
 OUT.mkdir(parents=True, exist_ok=True)
 rng = np.random.default_rng(20261107)

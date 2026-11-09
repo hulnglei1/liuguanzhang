@@ -1,4 +1,4 @@
-"""生成一整张连续的战场地面（1248×1040，2 倍于棋盘 624×520）。
+"""生成一整张连续的战场地面（2496×1456，2 倍于棋盘 1248×728）。
 
 为什么不按格子铺：每格铺一张 104×104，等于每格都把图案"重置"一次，
 格与格之间必然对不上，玩家看到的就是一块块补丁。
@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-W, H = 1248, 1040
+W, H = 2496, 1456   # 24x14 棋盘 @2x
 OUT = Path(__file__).resolve().parents[1] / "assets" / "tiles"
 OUT.mkdir(parents=True, exist_ok=True)
 rng = np.random.default_rng(20261107)

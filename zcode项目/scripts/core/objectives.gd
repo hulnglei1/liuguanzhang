@@ -39,6 +39,15 @@ static func stage_cleared(stage: Dictionary, ctx: Dictionary) -> bool:
 				return true                      # 目标阵亡也算达成
 			var cell: Array = u2.get("cell", [0, 0])
 			var edge: String = str(win.get("edge", "east"))
+			# 地图变宽后"东边缘"会跟着变远（24 格地图上要跑 12 格）。
+			# 关卡若想固定一条撤退线，可在 win 里写 edge_x 覆盖。
+			var edge_x: int = int(win.get("edge_x", -1))
+			if edge_x >= 0:
+				match edge:
+					"east":
+						return int(cell[0]) >= edge_x
+					"west":
+						return int(cell[0]) <= edge_x
 			var mw: int = int(ctx.get("map_w", 12))
 			var mh: int = int(ctx.get("map_h", 10))
 			match edge:

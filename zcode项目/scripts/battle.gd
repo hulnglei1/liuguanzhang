@@ -37,8 +37,8 @@ const ICON_ENDTURN := preload("res://assets/icons/endturn.png")
 
 const TILE := 52.0          # 格子像素（升级为52以充实画面）
 const MAP_OFFSET := Vector2(24.0, 66.0) # 棋盘左上角偏移
-const MAP_W := 12
-const MAP_H := 10
+const MAP_W := 24          # 24×14：比一屏（≈12×10）宽一倍，才有"分拨驻守"的纵深
+const MAP_H := 14
 
 ## 当前要加载的章节 id（由 main.gd 设置）："chapter1" / "chapter2"
 static var chapter_id: String = "chapter1"
@@ -106,6 +106,17 @@ var dialog_showing := false
 var queued_events: Array = []       # 已触发过一次的事件 key
 var win_dialog_played := false
 
+## ---------- 镜头（曹操传式：战场大于一屏） ----------
+const BOARD_VIEW := Vector2(624, 520)     # 棋盘可视区（屏幕像素）
+const PAN_KEY_SPEED := 460.0              # 方向键平移速度 px/s
+const MINIMAP_CELL := 6.0                 # 小地图每格像素
+var camera_pan: Vector2 = Vector2.ZERO    # 世界坐标下"视口左上角"的偏移
+var _pan_ready := false
+var minimap_panel: Panel = null
+var board_frame: Control = null
+var minimap_dots: Array = []
+var minimap_view_rect: ColorRect = null
+
 func _ready() -> void:
 	_configure_display()
 	_setup_audio()
@@ -113,7 +124,9 @@ func _ready() -> void:
 	_apply_ui_styles()
 	_init_dashboard()
 	_draw_grid()
+	_setup_camera()
 	_spawn_units()
+	_update_minimap()      # 单位生成后再画一次小地图（_setup_camera 时 units 还是空的）
 	_apply_gear_bonuses()
 	_apply_bonds()
 	_setup_portrait_layer()
@@ -520,7 +533,8 @@ func _cell_to_px(cell: Vector2i) -> Vector2:
 	return MAP_OFFSET + Vector2(cell.x * TILE + TILE / 2.0, cell.y * TILE + TILE / 2.0)
 
 func _px_to_cell(pos: Vector2) -> Vector2i:
-	var rel := pos - MAP_OFFSET
+	# pos 是**屏幕**坐标（鼠标事件），棋盘世界坐标要把它加上镜头偏移
+	var rel := pos + camera_pan - MAP_OFFSET
 	if rel.x < 0 or rel.y < 0:
 		return Vector2i(-1, -1)
 	var cx := floori(rel.x / TILE)
@@ -605,6 +619,10 @@ const KEY_END_TURN: int = KEY_SPACE
 
 ## 输入分发：按当前阶段转给对应的处理函数
 func _input(event: InputEvent) -> void:
+	# 0. 鼠标落在小地图上 → 交给 GUI 处理。
+	#    棋盘点击会把事件 set_input_as_handled()，不放行的话小地图永远收不到点击。
+	if event is InputEventMouseButton and minimap_panel != null 			and is_instance_valid(minimap_panel) and minimap_panel.visible 			and minimap_panel.get_global_rect().has_point(event.position):
+		return
 	# 1. 剧情对白阶段
 	if dialog_showing:
 		_input_dialog(event)
@@ -1290,6 +1308,139 @@ func _do_wait(u) -> void:
 	move_gained_charge = 0
 	info_label.text = "%s 待机休整（本回合行动完毕）" % u.name
 	_after_action(u)
+
+## ---------- 镜头平移 + 小地图 ----------
+
+func _setup_camera() -> void:
+	# 1) 边框钉住：它是"窗口"，不跟着战场滚。
+	#    注意不能 reparent —— reparent 后它排到兄弟节点最后，会画在棋盘上面把地图盖死。
+	#    做法是每帧给它一个反向位移，抵消 map_root 的 -camera_pan。
+	board_frame = map_root.get_node_or_null("BoardFrame")
+
+	# 2) 遮罩：棋盘外溢出的地面/单位要盖住（UI 是 CanvasLayer，层级更高，不受影响）
+	var bg_color: Color = $GlobalBg.color
+	var mask := CanvasLayer.new()
+	mask.name = "MaskLayer"
+	mask.layer = 0     # UI 的 CanvasLayer 是 1，遮罩必须更低，否则会盖住整个界面
+	add_child(mask)
+	var strips := [
+		Rect2(0, 0, 1280, MAP_OFFSET.y),
+		Rect2(0, MAP_OFFSET.y + BOARD_VIEW.y, 1280, 720 - MAP_OFFSET.y - BOARD_VIEW.y),
+		Rect2(0, MAP_OFFSET.y, MAP_OFFSET.x, BOARD_VIEW.y),
+		Rect2(MAP_OFFSET.x + BOARD_VIEW.x, MAP_OFFSET.y, 1280 - MAP_OFFSET.x - BOARD_VIEW.x, BOARD_VIEW.y),
+	]
+	for r in strips:
+		var c := ColorRect.new()
+		c.color = bg_color
+		c.position = r.position
+		c.size = r.size
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mask.add_child(c)
+
+	_build_minimap()
+	_pan_ready = true
+	_apply_pan()
+
+
+func _pan_limit() -> Vector2:
+	return Vector2(maxf(0.0, MAP_W * TILE - BOARD_VIEW.x), maxf(0.0, MAP_H * TILE - BOARD_VIEW.y))
+
+
+func _apply_pan() -> void:
+	var lim := _pan_limit()
+	camera_pan = Vector2(clampf(camera_pan.x, 0.0, lim.x), clampf(camera_pan.y, 0.0, lim.y))
+	map_root.position = -camera_pan
+	unit_root.position = -camera_pan
+	overlay.position = -camera_pan
+	if board_frame != null and is_instance_valid(board_frame):
+		board_frame.position = camera_pan      # 边框钉在屏幕上
+	_update_minimap()
+
+
+func _process(delta: float) -> void:
+	if not _pan_ready or dialog_showing:
+		return
+	var d := Vector2.ZERO
+	if Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_A):
+		d.x -= 1.0
+	if Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_D):
+		d.x += 1.0
+	if Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_W):
+		d.y -= 1.0
+	if Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_S):
+		d.y += 1.0
+	if d != Vector2.ZERO:
+		camera_pan += d.normalized() * PAN_KEY_SPEED * delta
+		_apply_pan()
+
+
+func _build_minimap() -> void:
+	var mm_w: float = MAP_W * MINIMAP_CELL
+	var mm_h: float = MAP_H * MINIMAP_CELL
+	minimap_panel = Panel.new()
+	minimap_panel.name = "Minimap"
+	minimap_panel.position = Vector2(BOARD_VIEW.x + MAP_OFFSET.x - mm_w - 8, MAP_OFFSET.y + BOARD_VIEW.y - mm_h - 8)
+	minimap_panel.size = Vector2(mm_w, mm_h)
+	minimap_panel.modulate = Color(1, 1, 1, 0.86)
+	minimap_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.07, 0.09, 0.88)
+	sb.border_color = Color(0.72, 0.60, 0.32, 0.9)
+	sb.set_border_width_all(2)
+	minimap_panel.add_theme_stylebox_override("panel", sb)
+	$UI.add_child(minimap_panel)
+
+	minimap_view_rect = ColorRect.new()
+	minimap_view_rect.color = Color(1.0, 0.9, 0.5, 0.16)
+	minimap_view_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	minimap_panel.add_child(minimap_view_rect)
+
+	# 点小地图 → 镜头跳过去
+	minimap_panel.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			var local: Vector2 = ev.position
+			var cell := Vector2i(floori(local.x / MINIMAP_CELL), floori(local.y / MINIMAP_CELL))
+			var target := Vector2(cell.x * TILE + TILE * 0.5, cell.y * TILE + TILE * 0.5) - BOARD_VIEW * 0.5
+			camera_pan = target
+			_apply_pan()
+	)
+
+
+func _update_minimap() -> void:
+	if minimap_panel == null:
+		return
+	# 视口框
+	if minimap_view_rect != null:
+		minimap_view_rect.position = Vector2(
+			camera_pan.x / TILE * MINIMAP_CELL,
+			camera_pan.y / TILE * MINIMAP_CELL)
+		minimap_view_rect.size = Vector2(
+			BOARD_VIEW.x / TILE * MINIMAP_CELL,
+			BOARD_VIEW.y / TILE * MINIMAP_CELL)
+	# 单位点：不够就补，多了就藏
+	var need: int = 0
+	for u in units:
+		if not u.alive:
+			continue
+		need += 1
+	while minimap_dots.size() < need:
+		var dot := ColorRect.new()
+		dot.size = Vector2(MINIMAP_CELL - 1.0, MINIMAP_CELL - 1.0)
+		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		minimap_panel.add_child(dot)
+		minimap_dots.append(dot)
+	var i := 0
+	for u in units:
+		if not u.alive:
+			continue
+		var dot: ColorRect = minimap_dots[i]
+		dot.visible = true
+		dot.color = Color(0.35, 0.75, 1.0, 0.95) if u.camp == "player" else Color(1.0, 0.35, 0.3, 0.95)
+		dot.position = Vector2(u.cell.x * MINIMAP_CELL + 0.5, u.cell.y * MINIMAP_CELL + 0.5)
+		i += 1
+	for k in range(i, minimap_dots.size()):
+		minimap_dots[k].visible = false
+
 
 ## ---------- 移动 ----------
 func _is_in_reachable(cell: Vector2i) -> bool:
