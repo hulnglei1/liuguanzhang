@@ -123,10 +123,12 @@ func _execute_mcp_method(method: String, params: Dictionary) -> Dictionary:
 				return {"status": "error", "message": "Node not found matching: " + q}
 				
 		"capture_screenshot":
-			await _capture_screenshot()
+			# 可选：{"jpg_path": "D:/.../frame.jpg"} 直接输出 JPEG（录帧更快）
+			var jpg_out: String = str(params.get("jpg_path", ""))
+			await _capture_screenshot(jpg_out)
 			return {
 				"status": "ok",
-				"screenshot": ProjectSettings.globalize_path(SCREENSHOT_PATH),
+				"screenshot": jpg_out if jpg_out != "" else ProjectSettings.globalize_path(SCREENSHOT_PATH),
 				"viewport_size": [get_viewport().size.x, get_viewport().size.y]
 			}
 			
@@ -308,7 +310,10 @@ func _simulate_key(key_str: String) -> void:
 	for i in range(8):
 		await get_tree().process_frame
 
-func _capture_screenshot() -> void:
+## 抓当前视口。
+## jpg_path 非空时直接存成 JPEG —— PNG 编码 1280×720 要 ~25ms，是录帧的主要瓶颈，
+## JPEG 只要几毫秒（做宣传片录制时用得上）。
+func _capture_screenshot(jpg_path: String = "") -> void:
 	await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	var vp = get_viewport()
@@ -317,8 +322,11 @@ func _capture_screenshot() -> void:
 		if tex:
 			var img = tex.get_image()
 			if img:
-				var abs_path = ProjectSettings.globalize_path(SCREENSHOT_PATH)
-				img.save_png(abs_path)
+				if jpg_path != "":
+					img.save_jpg(jpg_path, 0.9)
+				else:
+					var abs_path = ProjectSettings.globalize_path(SCREENSHOT_PATH)
+					img.save_png(abs_path)
 
 func _build_ui_tree() -> Dictionary:
 	var list: Array = []
