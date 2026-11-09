@@ -11,24 +11,27 @@ func _init() -> void:
 
 	# ---- 1. 装备加成：gear_def 进 DEF、gear_hp 进 HP、atk_pct ----
 	var guanyu = BattleUnitScript.from_data(_unit_def("guanyu"), Vector2i(0, 0))
+	var base_hp: int = guanyu.max_hp          # 期望值从基础属性推算，不写死快照数字
+	var base_def: int = guanyu.base_def
+	var base_atk: int = guanyu.base_atk
 	guanyu.gear_def = 6
 	guanyu.gear_hp = 40
 	guanyu.apply_hp_gear()
-	if guanyu.max_hp != 160 or guanyu.hp != 160:
-		print("[FAIL] 装备+40血后 max_hp 应为160，实际 ", guanyu.max_hp)
+	if guanyu.max_hp != base_hp + 40 or guanyu.hp != base_hp + 40:
+		print("[FAIL] 装备+40血后 max_hp 应为%d，实际 %d" % [base_hp + 40, guanyu.max_hp])
 		failed += 1
 	else:
 		print("[OK] 装备+40血生效 ✅")
 	# DEF：base 12 + gear 6 = 18
-	if guanyu.effective_def() != 18:
-		print("[FAIL] gear_def+6 后 DEF 应为18，实际 ", guanyu.effective_def())
+	if guanyu.effective_def() != base_def + 6:
+		print("[FAIL] gear_def+6 后 DEF 应为%d，实际 %d" % [base_def + 6, guanyu.effective_def()])
 		failed += 1
 	else:
 		print("[OK] 装备+6防生效 ✅")
 	# ATK pct：番薯种子 +10%
 	guanyu.atk_pct_bonus = 1.1
-	if guanyu.effective_atk() != 33:  # 30*1.1=33
-		print("[FAIL] atk_pct 1.1 后 ATK 应为33，实际 ", guanyu.effective_atk())
+	if guanyu.effective_atk() != int(round(base_atk * 1.1)):
+		print("[FAIL] atk_pct 1.1 后 ATK 应为%d，实际 %d" % [int(round(base_atk * 1.1)), guanyu.effective_atk()])
 		failed += 1
 	else:
 		print("[OK] 种子攻+10%生效 ✅")
@@ -36,7 +39,7 @@ func _init() -> void:
 	# ---- 2. 武安国被动「重锤巨力」平准化为 1.5 倍生效 ----
 	var wuanguo = BattleUnitScript.from_data(_unit_def("wuanguo"), Vector2i(0, 0))
 	var wa_atk: int = wuanguo.effective_atk()
-	if wa_atk != 45:  # 30*1.5=45
+	if wa_atk != int(round(wuanguo.base_atk * 1.5)):  # 被动 1.5 倍（不写死快照值）
 		print("[FAIL] 武安国重锤巨力 ATK 应为45，实际 ", wa_atk)
 		failed += 1
 	else:

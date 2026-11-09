@@ -65,8 +65,15 @@ static func do_attack(caster, target) -> Array:
 	var dmg: int = CombatCore.damage(attacker_atk, mult, target_def)
 	if target.iron_skin:
 		dmg = 0
-	target.take_damage(dmg)
-	var ev: Array = [CombatCore.make_damage_event(target.id, dmg, false)]
+	# 格挡：只有目标防御 ≥ 攻击时才可能（打杂兵不触发，打高防主将才出现）
+	var blocked := false
+	if dmg > 0 and randf() < CombatCore.block_chance(attacker_atk, target_def):
+		dmg = CombatCore.apply_block(dmg)
+		blocked = true
+	var applied: int = target.take_damage(dmg)
+	var ev: Array = [CombatCore.make_damage_event(target.id, applied, false)]
+	if blocked:
+		ev.append({"type": "blocked", "target": target.id, "by": caster.id})
 	if target.iron_skin:
 		ev.append({"type": "iron_skin_block", "target": target.id})
 	# 武安国铁锤猛击后脱力（1 回合）
@@ -238,40 +245,25 @@ static func do_arrow_rain(caster, target, all_units: Array = []) -> Array:
 			ev.append({"type": "death", "target": target.id})
 		return ev
 	
-	# 选射击对象：主目标 + 另一个最近的敌人（没有就两支都打主目标）
-	var picks: Array = [target]
-	var best = null
-	var best_d: int = 999
-	for u in all_units:
-		if u == null or not u.alive or u.id == target.id:
-			continue
-		if u.camp == caster.camp:
-			continue
-		var d: int = GridCore.chebyshev(caster.cell, u.cell)
-		if d < best_d:
-			best_d = d
-			best = u
-	if best != null:
-		picks.append(best)
-
-	var evs: Array = []
-	for t in picks:
-		evs.append({
-			"type": "skill", "skill_id": "arrow_rain", "caster": caster.id,
-			"fx": "fire_homing_arrow",
-			"arrow": {
-				"id": "arrow_%d" % [randi() % 100000 + 1],
-				"caster_id": caster.id,
-				"target_id": t.id,
-				"cell": caster.cell,
-				"target_cell": t.cell,
-				"speed": 1,          # 每回合只推进 1 格：慢到能看清它拐弯
-				"mult": 0.6,         # 单支伤害下调，靠"多支+绕后"取胜
-				"atk": caster.effective_atk()
-			},
-			"target": t.id
-		})
-	return evs
+	# 一次只射 1 支：两支从同一格同速同向出发会完全重叠，看起来就是一支。
+	# "多箭"靠的是 CD 0 + 每回合补射，在天上慢慢累积。
+	return [{
+		"type": "skill", "skill_id": "arrow_rain", "caster": caster.id,
+		"fx": "fire_homing_arrow",
+		"arrow": {
+			"id": "arrow_%d" % [randi() % 100000 + 1],
+			"caster_id": caster.id,
+			"target_id": target.id,
+			"cell": caster.cell,
+			"target_cell": target.cell,
+			"speed": 1,              # 每回合 1 格：慢，才看得见拐弯
+			"mult": 0.85,            # 单支接近普攻（不再靠一次两支堆伤害）
+			"phase": "approach",     # approach = 绕向目标身后；strike = 折返命中
+			"waypoint": Vector2i(-1, -1),   # 首次推进时按地图边界算出来
+			"atk": caster.effective_atk()
+		},
+		"target": target.id
+	}]
 
 ## 更新战场上所有正在飞行追击的飞弹（每回合推进 3 格）
 ## 返回本轮产生的事件（包括飞弹移动、命中伤害、目标死亡等）
@@ -295,10 +287,36 @@ static func advance_homing_arrows(active_arrows: Array, all_units: Array, map_w:
 		
 		var cur_pos: Vector2i = arr.get("cell", Vector2i(0, 0))
 		var target_pos: Vector2i = target.cell
-		var dist: int = GridCore.chebyshev(cur_pos, target_pos)
-		
-		# 若当前距离 <= 飞弹速度(3格)，本回合直接飞达并命中目标
-		if dist <= arr.get("speed", 1):
+		var speed: int = int(arr.get("speed", 1))
+
+		# ---- 绕后航点：目标身后 2 格（沿"我→目标"方向再往前）----
+		# 箭先飞过目标，再折回来打 —— 原著「箭雨绕了个弯」「从他身后擦过肩膀」
+		var phase := str(arr.get("phase", "approach"))
+		var wp: Vector2i = arr.get("waypoint", Vector2i(-1, -1))
+		if phase == "approach" and wp == Vector2i(-1, -1):
+			var d: Vector2i = (target_pos - cur_pos).sign()
+			if d == Vector2i.ZERO:
+				d = Vector2i(1, 0)
+			wp = target_pos + d * 2
+			if wp.x < 0 or wp.x >= map_w or wp.y < 0 or wp.y >= map_h:
+				# 身后出界 → 改从侧面绕（垂直方向），仍然是"迂回"而非直线
+				var perp := Vector2i(-d.y, d.x)
+				wp = target_pos + perp * 2
+				wp.x = clampi(wp.x, 0, map_w - 1)
+				wp.y = clampi(wp.y, 0, map_h - 1)
+			arr["waypoint"] = wp
+			wp = arr["waypoint"]
+
+		# 绕后阶段走到位 → 转为折返
+		if phase == "approach" and GridCore.chebyshev(cur_pos, wp) <= speed:
+			arr["phase"] = "strike"
+			phase = "strike"
+
+		var aim_pos: Vector2i = wp if phase == "approach" else target_pos
+		var dist: int = GridCore.chebyshev(cur_pos, aim_pos)
+
+		# 折返阶段贴近目标才命中（绕后阶段即使擦过目标也不算命中）
+		if phase == "strike" and GridCore.chebyshev(cur_pos, target_pos) <= speed:
 			var dmg: int = CombatCore.damage(arr.get("atk", 20), float(arr.get("mult", 1.0)), target.effective_def())
 			target.take_damage(dmg)
 			events.append({
@@ -312,8 +330,8 @@ static func advance_homing_arrows(active_arrows: Array, all_units: Array, map_w:
 		else:
 			# 尚未追上：向目标方向逼近 speed 格
 			var new_cell := cur_pos
-			for s in range(arr.get("speed", 3)):
-				var step_diff: Vector2i = target_pos - new_cell
+			for s in range(speed):
+				var step_diff: Vector2i = aim_pos - new_cell
 				if step_diff == Vector2i.ZERO:
 					break
 				var step_dir := Vector2i(clampi(step_diff.x, -1, 1), clampi(step_diff.y, -1, 1))

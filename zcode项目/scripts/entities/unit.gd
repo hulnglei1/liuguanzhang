@@ -24,6 +24,7 @@ var charge: int = 0          # 蓄力值（关羽:格数 / 张飞:轮数）
 var max_charge: int = 0      # 蓄力上限
 var cds: Dictionary = {}     # skill_id -> 剩余冷却
 var stun_turns: int = 0      # 眩晕剩余回合
+var zhaoyun_guard_used: bool = false   # 【常山铁壁】本回合首次减伤是否已用
 var alive: bool = true
 var hua_rage_turns: int = 0  # 华雄叠层回合计数（虎牢狂力）
 var combo_strikes: int = 0   # 吕布方天乱舞连击计数（第3击翻3倍）
@@ -139,6 +140,7 @@ func start_cd(skill_id: String, cd: int) -> void:
 
 ## 回合结束：冷却-1、眩晕-1、华雄叠层+1、脱力恢复
 func end_turn() -> void:
+	zhaoyun_guard_used = false    # 新回合：常山铁壁恢复
 	for k in cds.keys():
 		if cds[k] > 0:
 			cds[k] -= 1
@@ -171,13 +173,22 @@ func add_rage() -> void:
 	rage_multiplier *= 1.5
 
 ## 受击：处于铁皮状态时免除一切伤害
-func take_damage(dmg: int) -> void:
+## 扣血。返回**实际扣掉的量**（格挡/减伤后），供事件与飘字使用。
+func take_damage(dmg: int) -> int:
 	if iron_skin:
-		return
-	hp -= dmg
+		return 0
+	var applied := dmg
+	# 【常山铁壁】赵云每回合第一次受击减伤 30%。
+	# 原著里赵云的底子是"无限耐力、冲阵不死"，减伤比加攻更贴人设，
+	# 也让他敢单独钻进敌后（他没有攻击性绝技，全靠基础盘）。
+	if id == "zhaoyun" and not zhaoyun_guard_used and dmg > 0:
+		applied = maxi(1, int(round(float(dmg) * 0.7)))
+		zhaoyun_guard_used = true
+	hp -= applied
 	if hp <= 0:
 		hp = 0
 		alive = false
+	return applied
 
 ## 按百分比自愈生命（返回实际恢复量）
 func heal_percent(pct: float) -> int:

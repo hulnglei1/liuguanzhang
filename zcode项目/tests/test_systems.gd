@@ -21,8 +21,9 @@ func _init() -> void:
 	# ---- 1. 士气修正 ----
 	MoraleCore.apply_morale([guanyu], 120)  # 士气120 → ×1.2
 	var atk_high: int = guanyu.effective_atk()
-	if atk_high != 36:  # 30×1.2=36
-		print("[FAIL] 士气120 关羽ATK应为36，实际 ", atk_high)
+	var expect_high: int = int(round(guanyu.base_atk * 1.2))   # ×1.2 从基础攻击推算
+	if atk_high != expect_high:
+		print("[FAIL] 士气120 ATK 应为%d，实际 %d" % [expect_high, atk_high])
 		failed += 1
 	else:
 		print("[OK] 士气120 → ATK×1.2 = 36 ✅")

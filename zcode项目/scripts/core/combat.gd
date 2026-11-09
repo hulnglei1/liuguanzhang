@@ -7,6 +7,25 @@ static func damage(atk: int, multiplier: float, def: int) -> int:
 	var dmg := int(round(atk * multiplier)) - def
 	return max(dmg, 1)
 
+## 格挡概率。
+## 原著：吕布「连忙格挡」挡张飞蛇矛、张飞「强行格挡」仍倒飞、刘备挡住一击却双腿瘫软
+##   → 格挡是**减伤 + 有代价**，不是免疫。
+## 关键限制：**只有目标防御 ≥ 攻击方攻击时才判定**。
+##   否则"菜鸡普攻 + 格挡"会让杂兵互砍变成互相挠痒，战斗被拖长。
+static func block_chance(atk: int, def: int) -> float:
+	# 只有"防得住"的单位才可能格挡：杂兵（def ≤ 8）永远不会，符合原著里
+	# 只有大将才挡得住刀箭（吕布扫开箭雨、张飞强行格挡、刘备奋力挡住一击）。
+	if def <= 8:
+		return 0.0
+	# 防御越高越挡得住；攻击越猛越难被挡（力量压制）
+	return clampf(0.05 + float(def - 10) * 0.03 - float(atk - 20) * 0.005, 0.03, 0.30)
+
+
+## 格挡后的伤害：减半（至少 1）
+static func apply_block(dmg: int) -> int:
+	return maxi(1, int(dmg * 0.5))
+
+
 ## 反击伤害：ATK × 0.7 − 敌 DEF，保底 1
 static func counter_damage(atk: int, def: int) -> int:
 	var dmg := int(round(float(atk) * 0.7)) - def

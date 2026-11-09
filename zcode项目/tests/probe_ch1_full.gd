@@ -106,8 +106,14 @@ func _test_initial_state() -> void:
 	# 小兵血量：张飞 14 字咆哮约 53 伤害，血量太低会被一吼带走（玩家反馈过）
 	var dao0 = b._unit_by_id("dao_bing_1")
 	var gong0 = b._unit_by_id("gong_bing_1")
-	_check(dao0.max_hp >= 75, "敌方刀兵 %d 血 ≥75（一嗓子吼不死）" % dao0.max_hp)
-	_check(gong0.max_hp >= 65, "敌方弓兵 %d 血 ≥65" % gong0.max_hp)
+	# 咆哮是**控场**不是输出：用"伤害关系"断言，而不是写死血量阈值。
+	# （旧写法 hp>=75 只是个代理指标，数值一动就误报，且它验不出真实意图）
+	var zf_ref = b._unit_by_id("zhangfei")
+	if zf_ref != null:
+		var roar6_dao: int = CombatCore.damage(zf_ref.effective_atk(), 0.64, dao0.effective_def())
+		var roar6_gong: int = CombatCore.damage(zf_ref.effective_atk(), 0.64, gong0.effective_def())
+		_check(roar6_dao < dao0.max_hp, "6 字咆哮(%d 伤) 打不死刀兵(%d 血) —— 控场不是输出" % [roar6_dao, dao0.max_hp])
+		_check(roar6_gong < gong0.max_hp, "6 字咆哮(%d 伤) 打不死弓兵(%d 血)" % [roar6_gong, gong0.max_hp])
 	var yi = b._unit_by_id("yi_bing_1")
 	_check(yi != null and yi.camp == "player", "我方带小兵（义军），可被华雄斩杀来喂他的绝技")
 

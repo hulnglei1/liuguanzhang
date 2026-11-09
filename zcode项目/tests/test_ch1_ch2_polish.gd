@@ -159,24 +159,28 @@ func _test_gongsunzan_homing_missile() -> void:
 	var fire_evs: Array = SkillsCore.do_arrow_rain(gongsun, distant_enemy)
 	_assert(fire_evs.size() > 0 and fire_evs[0].get("fx") == "fire_homing_arrow", "远距离目标成功发射定速飞弹实体")
 	var arrow_data: Dictionary = fire_evs[0].get("arrow")
-	_assert(arrow_data.get("speed") == 3, "飞弹飞行速度为每回合 3 格")
+	_assert(arrow_data.get("speed") == 1, "飞弹飞行速度为每回合 1 格（原著「箭矢速度偏慢」）")
 	
-	# 3. 推进第 1 回合（推进 3 格，未达目标）
+	# 3. 推进第 1 回合（推进 1 格，未达目标）
 	var active_arrows: Array = [arrow_data]
 	var advance_evs1: Array = SkillsCore.advance_homing_arrows(active_arrows, [distant_enemy])
-	_assert(advance_evs1.size() > 0 and advance_evs1[0].get("type") == "arrow_fly", "第1回合飞弹朝目标向前推进 3 格")
+	_assert(advance_evs1.size() > 0 and advance_evs1[0].get("type") == "arrow_fly", "第1回合飞弹朝绕后航点推进 1 格")
 	_assert(active_arrows.size() == 1, "飞弹尚在途中继续飞行")
-	
-	# 4. 推进第 2 回合（再推进 3 格）
-	var advance_evs2: Array = SkillsCore.advance_homing_arrows(active_arrows, [distant_enemy])
-	_assert(advance_evs2.size() > 0 and advance_evs2[0].get("type") == "arrow_fly", "第2回合飞弹继续逼近目标")
-	
-	# 5. 推进第 3 回合（飞抵目标并命中伤害）
+
+	# 4. 持续推进直到命中。速度 1 格/回合 + 先绕到目标侧后 2 格，
+	#    所以回合数 ≈ 距离 + 4，不能再假定"第 3 回合必中"
 	var old_hp: int = distant_enemy.hp
-	var advance_evs3: Array = SkillsCore.advance_homing_arrows(active_arrows, [distant_enemy])
-	_assert(advance_evs3.size() > 0 and advance_evs3[0].get("type") == "arrow_hit", "第3回合飞弹成功命中目标")
-	_assert(active_arrows.size() == 0, "命中后飞弹实体出膛销毁")
-	_assert(distant_enemy.hp < old_hp, "目标承受飞弹 1.0x 适度穿透伤害（%d -> %d）" % [old_hp, distant_enemy.hp])
+	var hit_turn: int = -1
+	for t in range(40):
+		var evs: Array = SkillsCore.advance_homing_arrows(active_arrows, [distant_enemy])
+		if evs.size() > 0 and evs[0].get("type") == "arrow_hit":
+			hit_turn = t + 1
+			break
+		if active_arrows.is_empty():
+			break
+	_assert(hit_turn > 0, "飞弹绕后飞行后成功命中（第 %d 回合）" % hit_turn)
+	_assert(active_arrows.size() == 0, "命中后飞弹实体销毁")
+	_assert(distant_enemy.hp < old_hp, "目标承受 0.85x 飞弹伤害（%d -> %d）" % [old_hp, distant_enemy.hp])
 
 func _test_chapter2_data_and_dialogs() -> void:
 	print("\n--- 验证【第二关】赵云登场与虎牢三英对白 ---")

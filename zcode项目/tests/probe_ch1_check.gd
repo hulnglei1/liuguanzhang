@@ -118,10 +118,11 @@ func _run() -> void:
 	_check(gs.cell == pos2, "内部入口也无法移动已行动单位（纵深防御）")
 
 	# ---------- 4. 飞弹推进直到命中 ----------
-	print("\n---- 4. 飞弹推进（每回合 3 格）----")
+	print("\n---- 4. 飞弹推进（每回合 1 格 + 绕后，需要更多回合）----")
 	var hp2: int = dao.hp
 	var hit_turn: int = -1
-	for turn in range(6):
+	# 速度 1 格/回合 + 先绕到目标侧后 2 格 → 回合数≈距离+4，上限给足
+	for turn in range(40):
 		b._update_homing_arrows()
 		await _wait(0.3)
 		print("  推进 %d 次：飞弹=%d 节点=%d 刀兵HP=%d" % [

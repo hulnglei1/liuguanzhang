@@ -1842,6 +1842,13 @@ func _apply_state_event(ev: Dictionary) -> void:
 			if stunned:
 				if "lubu_fangtian" in stunned.skill_ids:
 					stunned.fangtian_reset()
+		"blocked":
+			# 原著：铛一声挡住，但人还是被震退 —— 减伤不是免疫
+			var bt: BattleUnitScript = _unit_by_id(ev.target)
+			if bt:
+				_spawn_float_text(bt.cell, "铛！格挡", Color(0.88, 0.90, 0.96), true)
+				_spawn_burst(bt.cell, Color(0.85, 0.88, 1.0, 0.4), 1)
+				info_label.text += "\n%s 挥舞兵器挡下了这一击！伤害减半。" % bt.name
 		"armor_broken":
 			var ab := _unit_by_id(ev.target)
 			if ab:
