@@ -131,3 +131,38 @@ https://github.com/hulnglei1/liuguanzhang
 **建议**：我先把标题/简介/标签/封面/分镜全部备齐（上面已给），
 你复制粘贴投稿，**3 分钟搞定**；等我把浏览器环境修好，可以再试自动填表单，
 但扫码那一步仍然要你来。
+
+---
+
+## 附录：自动化链路（已打通，2026-11-09 晚）
+
+### 录制素材（自动，无需人工操作）
+```
+.tools/record_promo.py    驱动游戏打出关键镜头 + 后台抓帧（JPEG 直存，~15fps）
+.tools/build_promo.py     PIL 生成中文标题卡 + ffmpeg 补帧到 30fps + 拼接
+.tools/build_promo_v2.py  v2：换开场顺序 + 结尾 GitHub 卡 + 铺 BGM
+```
+关键前提：给 MCP 桥接的 `capture_screenshot` 加了 `jpg_path` 参数
+（PNG 编码 1280×720 要 ~25ms，是录帧瓶颈；JPEG 只要几毫秒）。
+
+### 成片
+| 版本 | 时长 | 内容 |
+|---|---|---|
+| v1 | 31s | 序章 → 战场 → 咆哮 → 飞箭 → 大地图（标题卡，无声） |
+| **v2** | **35s** | **开场换成咆哮（张飞立绘）→ 序章 → 战场 → 飞箭 → 大地图 → 结尾 GitHub 卡，配 bgm_battle + bgm_win** |
+
+文件在 `推广视频/候选素材/`。
+
+### 浏览器上传
+用 `web-access` skill 的 CDP 模式（直连自己的 Edge，带登录态），
+不要用 `agent-browser`（它自己下载 Chromium，第一次 open 会挂死）。
+
+Windows 上的完整启动配方见 `.workbuddy/memory/2026-11-08.md` 的
+「浏览器自动化的正确姿势」一节。要点：
+- Edge 必须用**独立 user-data-dir** + `--remote-allow-origins=*`
+- 手工写 `DevToolsActivePort` 指针，第二行是**完整路径** `/devtools/browser/<id>`
+- 代理要单独常驻（check-deps 退出会把它一起带走）
+
+### 仍需人工的一步
+B站登录（扫码）。登录后 `/eval` 读 `location.href`，
+不含 `passport.bilibili.com` 即为已登录，之后可自动填标题/简介/标签/封面并上传。
