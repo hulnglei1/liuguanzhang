@@ -1087,6 +1087,7 @@ func _cmd_use_electric_baton() -> void:
 				save["inventory"] = inv
 				SaveCore.save_state(save)
 				target.take_damage(10)
+				_sync_text(target)
 				target.stun_turns = maxi(target.stun_turns, 1)
 				_clear_overlay()
 				command_menu.visible = false
@@ -1738,6 +1739,8 @@ func _apply_damage_event(ev: Dictionary) -> void:
 		var dmg_str: String = ("💥暴击 -%d" if is_crit else "-%d") % ev.value
 		var dmg_col: Color = Color(1.0, 0.85, 0.2) if is_crit else Color(1, 0.4, 0.3)
 		info_label.text += "\n%s 受到 %d 伤害！" % [t.name, ev.value]
+		# 血条必须当场刷新（玩家反馈：砍一刀血槽还是满的，过一回合才掉）
+		_sync_text(t)
 
 		# 关羽千里逃窜蓄力被打断机制（契合原著小说：受击气脉震散，全部清零）
 		# 例外：骑赵云时赵云会硬扛第一击（原著里赵云扛着关羽狂奔，敌人追不上）
