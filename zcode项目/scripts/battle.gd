@@ -88,6 +88,7 @@ var pending_end_turn := false    # 空格结束回合的二次确认（防止没
 var defeat := false              # 战败标记：置位后停止一切操作（防"全灭后回合空转卡死"）
 var obstacle_nodes: Dictionary = {}
 var active_arrows: Array = []          # 战场中正在飞行的回旋飞弹
+var end_turn_prompt: Control = null    # "是否结束回合"确认弹窗
 var arrow_nodes: Dictionary = {}       # arrow_id -> Node2D（飞弹视觉节点）
 
 # 输入状态机
@@ -806,6 +807,14 @@ func _select_unit(id: String) -> void:
 	# 点击入口虽然有 not u.acted 判断，但 _select_unit 是公共入口，任何绕过
 	# （直接调用、撤回移动、以后新增的快捷键等）都必须拦得住，否则会出现
 	# "放完技能还能移动 / 还能再打一次" 这类漏洞。
+	if u.camp == "player" and u.is_stunned():
+		selected_id = ""
+		input_mode = InputMode.NONE
+		_clear_overlay()
+		_clear_command_menu()
+		command_menu.visible = false
+		info_label.text = "%s 眩晕中，本回合无法行动。" % u.name
+		return
 	if u.camp == "player" and u.acted:
 		selected_id = ""
 		input_mode = InputMode.NONE
@@ -1814,10 +1823,19 @@ func _apply_state_event(ev: Dictionary) -> void:
 		"stun":
 			var tar := _unit_by_id(ev.target)
 			if tar:
-				_spawn_float_text(tar.cell, "眩晕！", Color(0.9, 0.8, 0.2))
+				_spawn_float_text(tar.cell, "💫 眩晕！", Color(0.78, 0.55, 1.0), true)
+				_flash_unit(tar.id, Color(0.66, 0.35, 0.95))
 				_spawn_shockwave(tar.cell, Color(0.9, 0.8, 0.2, 0.6))
 				# 连携提示：控住=集火窗口
 				_spawn_banner("%s 被控住！快集火！" % tar.name, Color(0.9, 0.8, 0.2))
+				# 我方单位被眩晕：当场失去行动权（否则"眩晕了还能移动"，玩家已反馈）
+				if tar.camp == "player":
+					tar.acted = true
+					tar.moved_this_turn = true
+					if selected_id == tar.id:
+						_cancel_input()
+				# 图标立即刷新 —— 不刷新的话要等下次点选才看得到 💫
+				_update_unit_visuals(tar, unit_nodes.get(tar.id))
 			info_label.text += "\n%s 被眩晕 %d 回合！" % [_unit_by_id(ev.target).name, ev.turns]
 			# 许褚/吕布被眩晕时解除连击/裸衣（打断）
 			var stunned := _unit_by_id(ev.target)
@@ -2026,7 +2044,7 @@ func _update_homing_arrows() -> void:
 					var target_px: Vector2 = _cell_to_px(ev.to_cell)
 					UnitViewCore.face_to(node, target_px)      # 飞行中转向目标
 					var tw := create_tween()
-					tw.tween_property(node, "position", target_px, 0.35).set_trans(Tween.TRANS_SINE)
+					tw.tween_property(node, "position", target_px, 0.85).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)   # 0.35→0.85：让玩家看得清它怎么拐弯
 			"arrow_hit":
 				var node: Node2D = arrow_nodes.get(ev.arrow_id)
 				if node and is_instance_valid(node):
@@ -2126,14 +2144,20 @@ func _after_action(u) -> void:
 		_finish_turn_action()
 		return
 	# 完成本行动，重置选中与命令状态
+	# ⚠ 必须先登记"该单位已行动"：TurnCore.all_acted 判的是 turn_state.acted_ids，
+	#   而 mark_acted 之前**从来没有被调用过** → acted_ids 永远为空 →
+	#   "全员行动完毕"永不成立，自动结束回合与结束确认弹窗全都触发不了。
+	if u != null:
+		TurnCore.mark_acted(turn_state, u.id)
 	_finish_turn_action()
 	# 全部行动完自动结束回合
 	var alive_ids: Array = []
 	for uu in _camp_units("player"):
 		alive_ids.append(uu.id)
 	if TurnCore.all_acted(turn_state, alive_ids):
-		_spawn_banner("✅ 我方全员行动完毕 → 敌方回合", Color(0.6, 0.85, 1.0))
-		_end_player_turn()
+		# 曹操传式：不自动切回合，先弹窗问一句（玩家反馈"希望更主动地提示"）
+		_spawn_banner("✅ 我方全员行动完毕", Color(0.6, 0.85, 1.0))
+		_show_end_turn_prompt()
 	else:
 		# 提示还有谁可行动
 		var remaining := 0
@@ -2144,7 +2168,73 @@ func _after_action(u) -> void:
 			info_label.text += "\n（还有 %d 个单位未行动，点它们继续）" % remaining
 		_update_hud()
 
+## 曹操传式确认弹窗：我方全员行动完毕后，主动问一句"是否结束回合"
+func _show_end_turn_prompt() -> void:
+	if end_turn_prompt != null and is_instance_valid(end_turn_prompt):
+		return
+	var panel := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.09, 0.10, 0.13, 0.97)
+	sb.border_color = Color(0.86, 0.72, 0.36, 1.0)
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(8)
+	sb.content_margin_left = 22
+	sb.content_margin_right = 22
+	sb.content_margin_top = 16
+	sb.content_margin_bottom = 16
+	panel.add_theme_stylebox_override("panel", sb)
+	panel.position = Vector2(430, 286)
+	panel.custom_minimum_size = Vector2(420, 148)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 14)
+	panel.add_child(vb)
+
+	var lbl := Label.new()
+	lbl.text = "我方全员行动完毕\n是否结束回合？"
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 19)
+	lbl.add_theme_color_override("font_color", Color(0.96, 0.90, 0.74))
+	vb.add_child(lbl)
+
+	var hb := HBoxContainer.new()
+	hb.alignment = BoxContainer.ALIGNMENT_CENTER
+	hb.add_theme_constant_override("separation", 16)
+	vb.add_child(hb)
+
+	var yes := Button.new()
+	yes.name = "btn_end_turn_yes"
+	yes.text = "结束回合（空格）"
+	yes.custom_minimum_size = Vector2(170, 40)
+	yes.pressed.connect(func() -> void:
+		_close_end_turn_prompt()
+		_end_player_turn())
+	hb.add_child(yes)
+
+	var no := Button.new()
+	no.name = "btn_end_turn_no"
+	no.text = "再检查一下"
+	no.custom_minimum_size = Vector2(150, 40)
+	no.pressed.connect(func() -> void:
+		_close_end_turn_prompt()
+		pending_end_turn = false
+		info_label.text = "（可继续查看战场；随时按空格结束回合）")
+	hb.add_child(no)
+
+	end_turn_prompt = panel
+	$UI.add_child(panel)
+	command_menu.visible = false
+	_play_sfx("ui_click")
+
+
+func _close_end_turn_prompt() -> void:
+	if end_turn_prompt != null and is_instance_valid(end_turn_prompt):
+		end_turn_prompt.queue_free()
+	end_turn_prompt = null
+
+
 func _end_player_turn() -> void:
+	_close_end_turn_prompt()
 	pending_end_turn = false
 	_play_sfx("turn")
 	# 我方单位的"回合流逝"：技能冷却-1、眩晕-1、脱力-1

@@ -375,6 +375,9 @@ static func update_unit_visuals(u, node: Node2D) -> void:
 			s += "🔥"
 		if u.armor_broken:
 			s += "🛡️"
+		# 已移动但还能攻击：给个 🚶 标记，别让玩家以为他还能再走一次
+		if u.camp == "player" and u.moved_this_turn and not u.acted:
+			s += "🚶"
 		status.text = s
 
 	# 已行动：灰蓝 + 降透明 + 暂停待机动画（三者叠加才一眼能看出来）
@@ -384,6 +387,9 @@ static func update_unit_visuals(u, node: Node2D) -> void:
 			node.modulate = Color(0.52, 0.55, 0.62, 0.72)
 			if anim != null and anim.animation == "idle" and anim.is_playing():
 				anim.pause()
+		elif u.moved_this_turn:
+			# 已移动未结束：轻微压暗（比"已行动"浅），提示动过但还能攻击
+			node.modulate = Color(0.86, 0.86, 0.90, 1.0)
 		else:
 			node.modulate = Color(1, 1, 1, 1)
 			if anim != null and anim.animation == "idle" and not anim.is_playing():
