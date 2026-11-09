@@ -356,10 +356,11 @@ func update(ctx: Dictionary) -> void:
 			dash_gimmick_desc.text = "绝技【燕人咆哮】已就绪（开局即用）！\n💡 六字「燕人张飞在此」= 速控 1 回合\n💡 十四字「谁敢与我决一死战」= 眩晕 2 回合 + 震碎吕布铁皮，但声浪敌我不分（戴耳塞免疫）"
 			dash_gimmick_bar.value = 100
 	elif u.id == "huaxiong":
-		dash_gimmick_title.text = "🩸 逃兵狂热 (拖延暴怒)"
+		dash_gimmick_title.text = "🩸 虎牢狂力（斩杀叠层）"
 		dash_gimmick_title.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2))
-		dash_gimmick_desc.text = "已拖延 %d 回合，攻击强化 %.2fx (当前 ATK: %d)\n⚠ 必须速战速决！" % [u.hua_rage_turns, CombatCore.hua_boost_multiplier(u.hua_rage_turns), u.effective_atk()]
-		dash_gimmick_bar.value = min(u.hua_rage_turns * 20, 100)
+		var hx_boost: float = CombatCore.hua_boost_multiplier(u.hua_kills)
+		dash_gimmick_desc.text = "已斩 %d 将，力量 ×%.1f（当前攻击 %d）\n💡 原著：斩将才涨，每斩一将 +20%%！他上场前已斩 3 将。" % [u.hua_kills, hx_boost, u.effective_atk()]
+		dash_gimmick_bar.value = min(u.hua_kills * 20, 100)
 	elif "lubu_fangtian" in u.skill_ids:
 		dash_gimmick_title.text = "🔥 鬼神方天 (方天连击)"
 		dash_gimmick_title.add_theme_color_override("font_color", Color(0.9, 0.4, 1.0))
@@ -400,7 +401,7 @@ func update_chapter_objectives(ctx: Dictionary) -> void:
 		"chapter1":
 			dash_primary_obj.text = "🎯 主要军令：斩杀敌方主将【%s】%s" % [c_name, c_hp_str]
 			dash_secondary_obj.text = "⭐ 战术目标：5 回合内速胜（防止狂力叠高）"
-			dash_tips_content.text = "• 关羽【千里·青龙斩】：每移动 1 格蓄力+1，跑得越远刀芒与贯穿越长！满 10 格震裂城门引发敌军防线崩溃(DEF-20%)！\n• 张飞【燕人咆哮】：点技能后连点喊字，喊得越长威力越大！六字速控，十四字眩晕两回合！\n• 赵云【无限耐力】：牛马神技！行动后直接自愈15%生命！普攻每2次追加一枪！关羽骑乘触发双子合击！\n• 华雄战力随回合膨胀(+15%/回合)，切勿打持久消耗战！"
+			dash_tips_content.text = "• 关羽【千里·青龙斩】：每移动 1 格蓄力+1，跑得越远刀芒与贯穿越长！满 10 格震裂城门引发敌军防线崩溃（防御-20%）！\n• 张飞【燕人咆哮】：点技能后连点喊字，喊得越长威力越大！六字速控，十四字眩晕两回合！\n• 赵云【无限耐力】：牛马神技！行动后直接自愈15%生命！普攻每2次追加一枪！关羽骑乘触发双子合击！\n• 华雄【虎牢狂力】：每斩一将力量+20%（他上场前已斩3将，开局就是×1.6）！"
 		"chapter2":
 			dash_primary_obj.text = "🎯 主要军令：击退天下无双【%s】%s" % [c_name, c_hp_str]
 			dash_secondary_obj.text = "⭐ 战术目标：打断方天连击，破除铁皮无敌"

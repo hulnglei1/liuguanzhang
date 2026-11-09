@@ -5,7 +5,7 @@ extends RefCounted
 
 ## 种子奖池：消耗1000声望，通关后一次性可持续获得
 const SEED_POOL := [
-	{"id": "corn", "name": "玉米种子", "desc": "关卡内每回合全体回HP 5", "buff": "hp_regen", "value": 5},
+	{"id": "corn", "name": "玉米种子", "desc": "关卡内每回合全体回复 5 点生命", "buff": "hp_regen", "value": 5},
 	{"id": "potato", "name": "土豆种子", "desc": "下一关开局士气+10", "buff": "morale_start", "value": 10},
 	{"id": "sweet_potato", "name": "番薯种子", "desc": "关卡内我方攻击+10%", "buff": "atk_pct", "value": 0.10},
 	{"id": "earplug", "name": "静音耳塞", "desc": "原著刘备同款：免疫张飞十四字咆哮的敌我不分，自己人不会被震晕！", "buff": "roar_immune", "value": 1},

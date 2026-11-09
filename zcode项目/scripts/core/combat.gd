@@ -134,8 +134,11 @@ static func dash_multiplier(weaves: int) -> float:
 	return 0.4 * float(w)
 
 ## 华雄【虎牢狂力】：每回合 ATK +15%，上限 +150%
-static func hua_boost_multiplier(turns_elapsed: int) -> float:
-	return 1.0 + 0.15 * float(clampi(turns_elapsed, 0, 10))
+## 虎牢狂力倍率：每斩杀一员敌将，力量 +20%。
+## 原著口径是"倍"级跳变：华雄 10 倍 → 斩潘凤后 14 倍（每斩一将 +2/10 = +20%）。
+## 开局 3 层（他前面已经斩过俞涉、潘凤等人，"把他的绝技养起来了"）→ ×1.6。
+static func hua_boost_multiplier(kills: int) -> float:
+	return 1.0 + 0.20 * float(maxi(0, kills))
 
 ## 士气修正：基准 100 为 1.0。每 1 点士气 = 1% 攻防，范围 0.40 ~ 2.00。
 ## 原著里"以多打少、死一个就翻倍"——这里用连续曲线表达滚雪球：

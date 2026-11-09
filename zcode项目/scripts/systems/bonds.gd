@@ -15,7 +15,7 @@ const BONDS := [
 		"id": "taoyuan",
 		"name": "桃园结义",
 		"members": ["liubei", "guanyu", "zhangfei"],
-		"desc": "刘关张同在阵中：开局士气 +10，且每回合全体回复 5 HP",
+		"desc": "刘关张同在阵中：开局士气 +10，且每回合全体回复 5 点生命",
 		"tag": "回复",
 	},
 	{

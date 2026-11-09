@@ -182,24 +182,26 @@ func _test_gate_too_weak() -> void:
 func _test_huaxiong_stack() -> void:
 	print("\n---- 5. 华雄叠层 ----")
 	var hx = b._unit_by_id("huaxiong")
+	# 原著：华雄的力量是"斩杀敌将"才涨的，不是拖回合拖出来的
 	var atk0: int = hx.effective_atk()
 	for i in range(3):
 		hx.end_turn()
 	var atk3: int = hx.effective_atk()
-	print("  ATK %d → %d（叠层 %d，倍率 %.2fx）" % [
-		atk0, atk3, hx.hua_rage_turns, CombatCore.hua_boost_multiplier(hx.hua_rage_turns)])
-	_check(hx.hua_rage_turns == 3, "拖 3 回合 = 叠 3 层")
-	_check(atk3 > atk0, "拖得越久华雄越强（与面板/军令文案一致）")
+	print("  拖 3 回合：攻击 %d → %d（斩杀层数 %d，倍率 %.2fx）" % [
+		atk0, atk3, hx.hua_kills, CombatCore.hua_boost_multiplier(hx.hua_kills)])
+	_check(hx.hua_kills == 3, "开局即 3 层（原著：他前面已斩过 3 员上将）")
+	_check(atk3 == atk0, "拖回合不再叠层（只有斩将才涨）")
 
 	# 斩将叠层：我方小兵阵亡 → 华雄再叠一层（原著"连斩联军数将"）
-	var before: int = hx.hua_rage_turns
+	var before: int = hx.hua_kills
 	var yi = b._unit_by_id("yi_bing_1")
 	yi.hp = 0
 	yi.alive = false
 	b._apply_events([{"type": "death", "target": "yi_bing_1"}])
 	await _wait(0.4)
-	print("  义军阵亡后叠层：%d → %d" % [before, hx.hua_rage_turns])
-	_check(hx.hua_rage_turns == before + 1, "我方阵亡 → 华雄「斩将」再叠一层")
+	print("  义军阵亡后叠层：%d → %d" % [before, hx.hua_kills])
+	_check(hx.hua_kills == before + 1, "我方阵亡 → 华雄「斩将」再叠一层")
+	_check(hx.effective_atk() > atk0, "斩将后攻击力上升")
 
 
 func _test_charge_reset() -> void:

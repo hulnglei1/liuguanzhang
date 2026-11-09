@@ -22,7 +22,7 @@ const SKILL_META := {
 	},
 	"hua_rage": {
 		"name": "虎牢狂力", "cd": 0, "charge_type": "none",
-		"max_charge": 0, "desc": "华雄：每回合ATK+15%",
+		"max_charge": 0, "desc": "华雄：每斩一将力量+20%（他上场前已斩3将，开局×1.6）",
 	},
 	"lubu_fangtian": {
 		"name": "方天乱舞", "cd": 0, "charge_type": "none",

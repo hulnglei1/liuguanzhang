@@ -141,7 +141,7 @@ func _snapshot_hua(style: String, when: String) -> void:
 	var hx = b._unit_by_id("huaxiong")
 	if hx == null:
 		return
-	_hua_trace.append("%s：ATK %d，狂暴层数 %d" % [when, int(hx.effective_atk()), int(hx.hua_rage_turns)])
+	_hua_trace.append("%s：攻击 %d，斩杀层数 %d" % [when, int(hx.effective_atk()), int(hx.hua_kills)])
 
 
 func _play_turn(style: String) -> void:

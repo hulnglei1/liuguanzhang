@@ -31,8 +31,9 @@ func _init() -> void:
 	# ---- 2. 不应战惩罚：敌军×2 ----
 	MoraleCore.apply_refuse_penalty([huaxiong, dao])
 	var hx_atk: int = huaxiong.effective_atk()
-	if hx_atk != int(round(huaxiong.base_atk * 2)):   # 不应战 ×2（不写死快照值）
-		print("[FAIL] 不应战后华雄ATK应为52，实际 ", hx_atk)
+	# 不应战 ×2 是叠在"虎牢狂力"之上的独立倍率：基础 × 斩将倍率 × 2
+	if hx_atk != int(round(huaxiong.base_atk * CombatCore.hua_boost_multiplier(huaxiong.hua_kills) * 2)):
+		print("[FAIL] 不应战后华雄攻击应为 %d，实际 %d" % [int(round(huaxiong.base_atk * CombatCore.hua_boost_multiplier(huaxiong.hua_kills) * 2)), hx_atk])
 		failed += 1
 	else:
 		print("[OK] 不应战惩罚 → 华雄ATK×2 = 52 ✅")

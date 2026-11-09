@@ -800,7 +800,7 @@ func _inspect_unit(id: String) -> void:
 	var u: BattleUnitScript = _unit_by_id(id)
 	if u:
 		if u.camp == "enemy":
-			info_label.text = "侦查敌情：【%s】HP %d/%d, 攻 %d, 防 %d" % [u.name, u.hp, u.max_hp, u.effective_atk(), u.effective_def()]
+			info_label.text = "侦查敌情：【%s】生命 %d/%d，攻击 %d，防御 %d" % [u.name, u.hp, u.max_hp, u.effective_atk(), u.effective_def()]
 		else:
 			info_label.text = "【%s】本回合已行动完毕（仅查看，不可操作）。" % u.name
 
@@ -948,14 +948,14 @@ func _show_command_menu() -> void:
 			else:
 				btn_skill.text = "龙斩(%d/%d)" % [u.charge, cap]
 		elif skill_id == "roar":
-			btn_skill.text = "咆哮·连点喊字%s" % ("" if ready else "(CD)")
+			btn_skill.text = "咆哮·连点喊字%s" % ("" if ready else "（冷却中）")
 		else:
-			btn_skill.text = "%s%s" % [skill_name, "" if ready else "(CD)"]
+			btn_skill.text = "%s%s" % [skill_name, "" if ready else "（冷却中）"]
 		# 禁用原因直接写在按钮上 —— 别让玩家对着灰按钮猜为什么点不动
 		var has_target: bool = _has_skill_target(u, skill_id)
 		if not ready:
 			var cd_left: int = int(u.cds.get(skill_id, 0))
-			var cd_txt: String = " ·CD剩%d" % cd_left if cd_left > 0 else " ·眩晕中"
+			var cd_txt: String = " ·冷却剩%d" % cd_left if cd_left > 0 else " ·眩晕中"
 			btn_skill.text += cd_txt
 			btn_skill.tooltip_text = "冷却中：还要 %d 回合" % cd_left
 		elif not has_target:
@@ -2018,11 +2018,11 @@ func _apply_state_event(ev: Dictionary) -> void:
 			var exh := _unit_by_id(ev.target)
 			if exh:
 				_spawn_float_text(exh.cell, "⚡ 铁锤沉重！力竭脱力！", Color(0.95, 0.65, 0.2))
-				info_label.text += "\n%s 挥出沉重铁锤全力猛击！陷入 1 回合力竭脱力（DEF-30%）！" % exh.name
+				info_label.text += "\n%s 挥出沉重铁锤全力猛击！陷入 1 回合力竭脱力（防御-30%）！" % exh.name
 		"heal":
 			var he := _unit_by_id(ev.target)
 			if he:
-				info_label.text += "\n%s 吸血恢复 %d HP！" % [he.name, ev.value]
+				info_label.text += "\n%s 吸血恢复 %d 点生命！" % [he.name, ev.value]
 		"fx":
 			if ev.fx == "dragon_full_screen":
 				if ev.get("shatter_gate", false):
@@ -2200,10 +2200,11 @@ func _on_player_unit_killed(victim) -> void:
 	var hx: BattleUnitScript = _unit_by_id("huaxiong")
 	if hx == null or not hx.alive:
 		return
-	hx.hua_rage_turns += 1
-	_spawn_float_text(hx.cell, "☠ 斩将！虎牢狂力 +1 层", Color(1.0, 0.5, 0.2), true)
-	_spawn_banner("☠ %s 被斩！华雄力量再涨一层（第 %d 层）" % [victim.name, hx.hua_rage_turns], Color(1.0, 0.6, 0.25))
-	info_label.text += "\n%s 阵亡，华雄越战越勇！" % victim.name
+	hx.hua_kills += 1
+	var boost_now: float = CombatCore.hua_boost_multiplier(hx.hua_kills)
+	_spawn_float_text(hx.cell, "☠ 斩将！力量 ×%.1f" % boost_now, Color(1.0, 0.5, 0.2), true)
+	_spawn_banner("☠ %s 被斩！华雄已斩 %d 将，力量 ×%.1f" % [victim.name, hx.hua_kills, boost_now], Color(1.0, 0.6, 0.25))
+	info_label.text += "\n%s 阵亡，华雄越战越勇（已斩 %d 将）！" % [victim.name, hx.hua_kills]
 	_sync_text(hx)
 
 ## 在回合流转时推进战场上所有飞行中的定速回旋飞弹
@@ -2272,7 +2273,7 @@ func _break_sishui_gate() -> void:
 	for e in _camp_units("enemy"):
 		if e.alive:
 			e.gate_broken_debuff = true
-			_spawn_float_text(e.cell, "🛡️ 防线溃乱 DEF-20%", Color(1.0, 0.4, 0.4))
+			_spawn_float_text(e.cell, "🛡️ 防线溃乱，防御-20%", Color(1.0, 0.4, 0.4))
 	_adjust_morale(30, -30)
 	# 破门夺关：即刻结算声望（原著霸业系统：占郡即得声望 → 抽奖 → 变强，这才是破城的价值）
 	var save: Dictionary = SaveCore.load_state()
@@ -2306,7 +2307,7 @@ func _after_action(u) -> void:
 		if healed > 0:
 			_spawn_float_text(zhaoyun.cell, "💪 无限耐力！自愈 +%d" % healed, Color(0.3, 1.0, 0.5), false)
 			_sync_node(zhaoyun)
-			info_label.text += "\n赵云体魄强健无限耐力！行动后自愈 %d HP！" % healed
+			info_label.text += "\n赵云体魄强健无限耐力！行动后自愈 %d 点生命！" % healed
 
 	# 检查胜利与失败
 	# 结算时也要清掉输入状态（input_mode / selected_id），否则会残留"可操作态"：
@@ -2578,7 +2579,7 @@ func _ai_attack(u, target) -> void:
 			_spawn_banner("许褚气急败坏！脱得只剩一条红裤衩！！", Color(1.0, 0.4, 0.2))
 			_shake_camera(8.0)
 			_apply_events(SkillsCore.do_naked_armor(u, units))
-			info_label.text += "\n许褚！气急败坏脱得只剩红裤衩！双方全员爆甲腰斩DEF+吸血狂战！"
+			info_label.text += "\n许褚！气急败坏脱得只剩红裤衩！双方全员爆甲腰斩，防御大减 + 吸血狂战！"
 		if u.lifesteal_active:
 			_apply_events(SkillsCore.do_naked_strike(u, target))
 			_apply_events(SkillsCore.do_naked_strike(u, target))  # 双倍攻速第二击
@@ -2689,7 +2690,7 @@ func _apply_event_effect(fx: Dictionary) -> void:
 				_spawn_burst(victim.cell, Color(1.0, 0.4, 0.3, 0.6), 2)
 				_shake_camera(5.0)
 				_sync_text(victim)
-				info_label.text += "\n%s 被吕布第三击轰飞！吐血脱力 %d 回合（DEF-30%%）！" % [victim.name, turns]
+				info_label.text += "\n%s 被吕布第三击轰飞！吐血脱力 %d 回合（防御-30%%）！" % [victim.name, turns]
 			else:
 				info_label.text += "\n%s 已是强弩之末，只脱力不扣血。" % victim.name
 			# retire: true → 扣完血当场被抬走（原著"吐血脱力，被亲兵抬下去"）

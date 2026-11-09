@@ -72,7 +72,8 @@
         "hua_rage"
       ],
       "is_commander": true,
-      "max_hp": 80
+      "max_hp": 80,
+      "hua_kills": 3
     },
     {
       "id": "dao_bing_1",

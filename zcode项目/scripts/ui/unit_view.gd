@@ -372,7 +372,7 @@ static func update_unit_visuals(u, node: Node2D) -> void:
 			status.add_theme_color_override("font_color", Color(0.78, 0.55, 1.0))
 		if u.is_mounted():
 			s += "🐎"
-		if u.rage_multiplier > 1.1 or u.hua_rage_turns > 0:
+		if u.rage_multiplier > 1.1 or u.hua_kills > 0:
 			s += "🔥"
 		if u.armor_broken:
 			s += "🛡️"

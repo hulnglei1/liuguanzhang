@@ -112,12 +112,19 @@ func _init() -> void:
 	else:
 		print("[OK] 七进七出7次 = 2.8倍")
 
-	# 12. 华雄叠层：5回合 = 1+0.75 = 1.75倍
-	if abs(CombatCoreScript.hua_boost_multiplier(5) - 1.75) > 0.001:
-		print("[FAIL] 华雄5回合应为1.75，实际 ", CombatCoreScript.hua_boost_multiplier(5))
+	# 12. 虎牢狂力：每斩一将 +20%。原著口径 10倍→12倍→14倍（每斩 +2/10）
+	#     设计锚点：0 层 ×1.0 / 开局 3 层 ×1.6 / 5 层 ×2.0
+	if abs(CombatCoreScript.hua_boost_multiplier(0) - 1.0) > 0.001:
+		print("[FAIL] 0 层应为 1.0，实际 ", CombatCoreScript.hua_boost_multiplier(0))
+		failed += 1
+	elif abs(CombatCoreScript.hua_boost_multiplier(3) - 1.6) > 0.001:
+		print("[FAIL] 开局 3 层应为 1.6，实际 ", CombatCoreScript.hua_boost_multiplier(3))
+		failed += 1
+	elif abs(CombatCoreScript.hua_boost_multiplier(5) - 2.0) > 0.001:
+		print("[FAIL] 5 层应为 2.0，实际 ", CombatCoreScript.hua_boost_multiplier(5))
 		failed += 1
 	else:
-		print("[OK] 华雄5回合 = 1.75倍")
+		print("[OK] 虎牢狂力：0层1.0 / 3层1.6 / 5层2.0 ✅")
 
 	# 13. 士气修正（滚雪球：clampf(1.0+(morale-100)*0.01, 0.4, 2.0)）
 	if abs(CombatCoreScript.morale_multiplier(80) - 0.80) > 0.001:

@@ -25,11 +25,12 @@ func _init() -> void:
 		failed += 1
 
 	# 3. 华雄叠层（拖了5回合）—— ATK 26×1.75=45.5，round 后 46
-	huaxiong.hua_rage_turns = 5
+	huaxiong.hua_kills = 5
 	var hua_atk: int = huaxiong.effective_atk()
-	print("[模拟] 华雄5回合后 ATK = %d（初始26，倍率1.75，round(45.5)=46）" % hua_atk)
-	if hua_atk != int(round(huaxiong.base_atk * 1.75)):   # 虎牢狂力 5 回合 → 倍率 1.75（不写死快照值）
-		print("[FAIL] 华雄叠层ATK应为46，实际 ", hua_atk)
+	print("[模拟] 华雄斩将 5 层后 攻击 = %d（每层+20%%）" % hua_atk)
+	if hua_atk != int(round(huaxiong.base_atk * CombatCore.hua_boost_multiplier(5))):
+		print("[FAIL] 华雄斩将 5 层后攻击应为 %d，实际 %d" % [
+			int(round(huaxiong.base_atk * CombatCore.hua_boost_multiplier(5))), hua_atk])
 		failed += 1
 
 	# 4. 关羽满蓄力龙斩

@@ -26,7 +26,7 @@ var cds: Dictionary = {}     # skill_id -> 剩余冷却
 var stun_turns: int = 0      # 眩晕剩余回合
 var zhaoyun_guard_used: bool = false   # 【常山铁壁】本回合首次减伤是否已用
 var alive: bool = true
-var hua_rage_turns: int = 0  # 华雄叠层回合计数（虎牢狂力）
+var hua_kills: int = 0       # 华雄已斩杀的我方单位数（虎牢狂力层数）
 var combo_strikes: int = 0   # 吕布方天乱舞连击计数（第3击翻3倍）
 var rage_multiplier: float = 1.0  # 吕布多打少暴怒加成（每死1我方×1.5）
 var armor_broken: bool = false  # 许褚裸衣爆甲：敌DEF减半
@@ -68,6 +68,8 @@ static func from_data(d: Dictionary, spawn: Vector2i):
 	u.rng = d.rng
 	u.skill_ids = (d.skills as Array).duplicate()
 	u.is_commander = d.get("is_commander", false)
+	# 华雄开局就带着"斩将"层数（原著：前面几个送菜的把绝技养起来了）
+	u.hua_kills = int(d.get("hua_kills", 0))
 	u.is_protect_target = d.get("is_protect_target", false)
 	u.cell = spawn
 	return u
@@ -81,7 +83,7 @@ func apply_hp_gear() -> void:
 func effective_atk() -> int:
 	var v: float = (float(base_atk) + float(gear_atk)) * morale_bonus * atk_pct_bonus
 	if "hua_rage" in skill_ids:
-		v *= CombatCore.hua_boost_multiplier(hua_rage_turns)
+		v *= CombatCore.hua_boost_multiplier(hua_kills)
 	if "lubu_fangtian" in skill_ids:
 		v *= _fangtian_multiplier()
 		v *= rage_multiplier
@@ -146,8 +148,9 @@ func end_turn() -> void:
 			cds[k] -= 1
 	if stun_turns > 0:
 		stun_turns -= 1
-	if "hua_rage" in skill_ids and alive:
-		hua_rage_turns += 1
+	# 注意：**这里不再每回合叠层**。
+	# 原著里华雄的力量是"斩杀敌将"才涨的（「华雄要连斩3名大将，才能达到6倍力量」），
+	# 每回合自动叠会让玩家还没交手就看到倍率乱涨。
 	if exhausted_turns > 0:
 		exhausted_turns -= 1
 	exhausted = exhausted_turns > 0
@@ -208,7 +211,7 @@ func to_dict() -> Dictionary:
 		"cell": [cell.x, cell.y],
 		"acted": acted, "charge": charge, "max_charge": max_charge,
 		"cds": cds.duplicate(), "stun_turns": stun_turns,
-		"alive": alive, "hua_rage_turns": hua_rage_turns,
+		"alive": alive, "hua_kills": hua_kills,
 		"morale_bonus": morale_bonus, "refuse_penalty": refuse_penalty,
 		"mount": mount.duplicate(),
 		"iron_skin": iron_skin, "zhaoyun_strike_count": zhaoyun_strike_count,
