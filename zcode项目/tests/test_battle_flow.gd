@@ -28,7 +28,7 @@ func _init() -> void:
 	huaxiong.hua_rage_turns = 5
 	var hua_atk: int = huaxiong.effective_atk()
 	print("[模拟] 华雄5回合后 ATK = %d（初始26，倍率1.75，round(45.5)=46）" % hua_atk)
-	if hua_atk != 46:
+	if hua_atk != int(round(huaxiong.base_atk * 1.75)):   # 虎牢狂力 5 回合 → 倍率 1.75（不写死快照值）
 		print("[FAIL] 华雄叠层ATK应为46，实际 ", hua_atk)
 		failed += 1
 

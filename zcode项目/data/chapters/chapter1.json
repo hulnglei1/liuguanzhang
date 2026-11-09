@@ -85,6 +85,16 @@
             "unit": "gong_bing_2",
             "x": 7,
             "y": 6
+        },
+        {
+            "unit": "dao_bing_3",
+            "x": 8,
+            "y": 3
+        },
+        {
+            "unit": "gong_bing_3",
+            "x": 8,
+            "y": 5
         }
     ],
     "morale": {

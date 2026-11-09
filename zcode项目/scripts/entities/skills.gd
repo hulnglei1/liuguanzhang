@@ -297,11 +297,13 @@ static func advance_homing_arrows(active_arrows: Array, all_units: Array, map_w:
 			var d: Vector2i = (target_pos - cur_pos).sign()
 			if d == Vector2i.ZERO:
 				d = Vector2i(1, 0)
-			wp = target_pos + d * 2
+			# 绕行航点必须**侧向偏出**：落在"目标正后方"时与目标在同一直线上，
+			# 箭会从目标身上穿过去再折回来（实机反馈"穿过华雄还在飞"）。
+			# 取"侧向 2 格 + 前出 1 格"，走一条弧线绕到侧后方。
+			var perp := Vector2i(-d.y, d.x)
+			wp = target_pos + perp * 2 + d
 			if wp.x < 0 or wp.x >= map_w or wp.y < 0 or wp.y >= map_h:
-				# 身后出界 → 改从侧面绕（垂直方向），仍然是"迂回"而非直线
-				var perp := Vector2i(-d.y, d.x)
-				wp = target_pos + perp * 2
+				wp = target_pos - perp * 2 + d       # 侧向出界就换另一侧
 				wp.x = clampi(wp.x, 0, map_w - 1)
 				wp.y = clampi(wp.y, 0, map_h - 1)
 			arr["waypoint"] = wp

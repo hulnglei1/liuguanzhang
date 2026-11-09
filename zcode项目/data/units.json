@@ -63,15 +63,16 @@
       "name": "华雄",
       "cls": "骑将",
       "camp": "enemy",
-      "hp": 90,
-      "atk": 26,
+      "hp": 80,
+      "atk": 30,
       "def": 10,
       "mov": 3,
       "rng": 1,
       "skills": [
         "hua_rage"
       ],
-      "is_commander": true
+      "is_commander": true,
+      "max_hp": 80
     },
     {
       "id": "dao_bing_1",
@@ -439,6 +440,32 @@
       "def": 6,
       "mov": 3,
       "rng": 1,
+      "skills": [],
+      "is_commander": false
+    },
+    {
+      "id": "dao_bing_3",
+      "name": "董卓刀兵·二",
+      "cls": "刀兵",
+      "camp": "enemy",
+      "hp": 65,
+      "atk": 9,
+      "def": 4,
+      "mov": 3,
+      "rng": 1,
+      "skills": [],
+      "is_commander": false
+    },
+    {
+      "id": "gong_bing_3",
+      "name": "董卓弓兵·二",
+      "cls": "弓兵",
+      "camp": "enemy",
+      "hp": 56,
+      "atk": 12,
+      "def": 5,
+      "mov": 3,
+      "rng": 2,
       "skills": [],
       "is_commander": false
     }

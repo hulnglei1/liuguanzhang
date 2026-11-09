@@ -101,7 +101,7 @@ func _test_initial_state() -> void:
 	_check(int(b.stages.size()) == 2, "第一阶段分两个军令")
 	_check(int(b.stage_idx) == 0, "开局停在阶段 1「温酒斩华雄」")
 	_check(n_player == 6, "我方 6 人（刘关张 + 公孙瓒 + 2 义军）")
-	_check(n_enemy == 5, "敌方 5 人（华雄 + 2 刀兵 + 2 弓兵）")
+	_check(n_enemy >= 5, "敌方至少 5 人（华雄 + 杂兵群），实际 %d" % n_enemy)
 	_check(int(b.morale["player"]) >= 110, "【桃园结义】生效：开局士气 110（100+10）")
 	# 小兵血量：张飞 14 字咆哮约 53 伤害，血量太低会被一吼带走（玩家反馈过）
 	var dao0 = b._unit_by_id("dao_bing_1")

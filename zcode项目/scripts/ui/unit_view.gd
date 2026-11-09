@@ -386,8 +386,14 @@ static func update_unit_visuals(u, node: Node2D) -> void:
 	if u.camp == "player":
 		if u.acted:
 			node.modulate = Color(0.52, 0.55, 0.62, 0.72)
-			if anim != null and anim.animation == "idle" and anim.is_playing():
-				anim.pause()
+			# 已行动：**强制停在待机首帧**。
+			# 原来只在"当前正播 idle"时才 pause —— 若这一刻在播攻击/受击，
+			# 播完会自己回到 idle 继续呼吸，玩家就看不出他已经行动完了。
+			if anim != null:
+				if anim.animation != "idle":
+					anim.play("idle")
+				if anim.is_playing():
+					anim.pause()
 		elif u.moved_this_turn:
 			# 已移动未结束：轻微压暗（比"已行动"浅），提示动过但还能攻击
 			node.modulate = Color(0.86, 0.86, 0.90, 1.0)

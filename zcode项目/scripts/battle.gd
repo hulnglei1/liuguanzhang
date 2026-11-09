@@ -619,10 +619,13 @@ const KEY_END_TURN: int = KEY_SPACE
 
 ## 输入分发：按当前阶段转给对应的处理函数
 func _input(event: InputEvent) -> void:
-	# 0. 鼠标落在小地图上 → 交给 GUI 处理。
-	#    棋盘点击会把事件 set_input_as_handled()，不放行的话小地图永远收不到点击。
-	if event is InputEventMouseButton and minimap_panel != null 			and is_instance_valid(minimap_panel) and minimap_panel.visible 			and minimap_panel.get_global_rect().has_point(event.position):
-		return
+# 0. 鼠标正压在**任意可交互 UI** 上 → 交给 GUI，不要当棋盘点击抢走。
+#    之前只放行了小地图，结果"结束回合确认窗""命令菜单"里的按钮全都点不动：
+#    棋盘点击会 set_input_as_handled()，GUI 永远收不到。
+	if event is InputEventMouseButton and event.pressed:
+		var hover: Control = get_viewport().gui_get_hovered_control()
+		if hover != null and hover.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+			return
 	# 1. 剧情对白阶段
 	if dialog_showing:
 		_input_dialog(event)
@@ -878,15 +881,19 @@ func _show_command_menu() -> void:
 	command_menu.visible = true
 
 	# 曹操传风格贴身浮动弹窗：定位在角色身旁
-	var cell_px := _cell_to_px(u.cell)
-	var menu_w: float = 144.0
-	var menu_x: float = cell_px.x + TILE / 2.0 + 8.0
-	if menu_x + menu_w > 640.0:
-		menu_x = cell_px.x - TILE / 2.0 - menu_w - 8.0
-	if menu_x < 10.0:
-		menu_x = 10.0
-	var menu_y: float = clampf(cell_px.y - 48.0, 70.0, 460.0)
+	# 贴身浮动弹窗定位。两处修正：
+	#  1) _cell_to_px 是**世界坐标**，command_menu 在 CanvasLayer 是**屏幕坐标**
+	#     → 必须减掉镜头偏移，否则镜头一滚菜单就飘到别的格子上
+	#  2) 宽度按内容给足（144 装不下"普通攻击"+图标，文字全溢出面板外）
+	var cell_px := _cell_to_px(u.cell) - camera_pan
+	var menu_w: float = 208.0
+	var menu_x: float = cell_px.x + TILE / 2.0 + 10.0
+	if menu_x + menu_w > BOARD_VIEW.x + MAP_OFFSET.x:
+		menu_x = cell_px.x - TILE / 2.0 - menu_w - 10.0
+	menu_x = clampf(menu_x, MAP_OFFSET.x + 4.0, BOARD_VIEW.x + MAP_OFFSET.x - menu_w - 4.0)
+	var menu_y: float = clampf(cell_px.y - 60.0, MAP_OFFSET.y + 6.0, MAP_OFFSET.y + BOARD_VIEW.y - 250.0)
 	command_menu.position = Vector2(menu_x, menu_y)
+	command_menu.custom_minimum_size = Vector2(menu_w, 0)
 
 	var bubble_panel := PanelContainer.new()
 	var bubble_sb := StyleBoxFlat.new()
@@ -915,7 +922,7 @@ func _show_command_menu() -> void:
 	# 1. 攻击
 	var can_atk := _has_attackable_target(u)
 	var btn_atk := Button.new()
-	btn_atk.custom_minimum_size = Vector2(136, 34)
+	btn_atk.custom_minimum_size = Vector2(196, 34)
 	btn_atk.name = "cmd_attack"      # 供自动化测试精确定位（别依赖按钮文案）
 	btn_atk.text = "普通攻击"
 	btn_atk.icon = ICON_ATTACK
@@ -930,7 +937,7 @@ func _show_command_menu() -> void:
 		var ready := u.skill_ready(skill_id)
 		var skill_name: String = SkillsCore.meta(skill_id).get("name", "绝技")
 		var btn_skill := Button.new()
-		btn_skill.custom_minimum_size = Vector2(136, 34)
+		btn_skill.custom_minimum_size = Vector2(196, 34)
 		if skill_id == "dragon_slash":
 			# 差一格的玩家最容易被骗：明确预告质变档（10 格破城门 / 20 格沿直线贯穿到底）
 			var cap: int = CombatCore.dragon_charge_cap(u.is_mounted())
@@ -2311,6 +2318,10 @@ func _after_action(u) -> void:
 	if _check_defeat():
 		_finish_turn_action()
 		return
+	# 行动结束后**立刻刷新该单位视觉**（灰蓝 + 停帧），否则他还在原地呼吸，
+	# 玩家会以为他还没行动完（实机反馈）。
+	if u != null:
+		_update_unit_visuals(u, unit_nodes.get(u.id))
 	# 完成本行动，重置选中与命令状态
 	# ⚠ 必须先登记"该单位已行动"：TurnCore.all_acted 判的是 turn_state.acted_ids，
 	#   而 mark_acted 之前**从来没有被调用过** → acted_ids 永远为空 →
@@ -2470,26 +2481,29 @@ func _run_enemy_turn() -> void:
 			info_label.text += "\n%s 无心恋战，率残部向东边的琅琊郡撤退！" % u.name
 			await get_tree().create_timer(0.55).timeout
 			continue
-		# 出手前高亮目标 + 短停顿，让玩家看清
+		# 出手前高亮目标 + 短停顿，让玩家看清。
+		# ⚠ 敌兵变多后（割草）如果每个都停 0.3s，敌方回合会变成"干等"。
+		#   主将保留完整演出，杂兵压到 0.12s —— 玩家看清主将动手，杂兵一带而过。
+		var pace: float = 0.30 if u.is_commander else 0.12
 		_flash_unit(target.id, Color(1, 0.6, 0.2))
-		await get_tree().create_timer(0.30).timeout
+		await get_tree().create_timer(pace).timeout
 		# 怎么打由 AI 决策层决定（scripts/systems/enemy_ai.gd），这里只负责执行
 		match EnemyAICore.attack_intent(u, target):
 			"kite_approach":
 				_move_toward(u, target.cell)
-				await get_tree().create_timer(0.28).timeout
+				await get_tree().create_timer(0.16 if not u.is_commander else 0.28).timeout
 				if GridCore.chebyshev(u.cell, target.cell) <= u.rng:
 					_ai_attack(u, target)
 			"kite_back":
 				_move_away(u, target.cell)
-				await get_tree().create_timer(0.28).timeout
+				await get_tree().create_timer(0.16 if not u.is_commander else 0.28).timeout
 				if GridCore.chebyshev(u.cell, target.cell) <= u.rng:
 					_ai_attack(u, target)
 			"attack":
 				_ai_attack(u, target)
 			_:
 				_move_toward(u, target.cell)
-				await get_tree().create_timer(0.28).timeout
+				await get_tree().create_timer(0.16 if not u.is_commander else 0.28).timeout
 				if GridCore.can_attack(u.cell, target.cell, u.is_cavalry(), u.rng):
 					_ai_attack(u, target)
 	# 敌回合结束

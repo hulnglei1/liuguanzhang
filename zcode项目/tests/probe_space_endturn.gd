@@ -81,7 +81,11 @@ func _run() -> void:
 
 	# 第二次空格 → 确认结束
 	_press_space()
-	await _wait(4.0)
+	# 敌方回合时长随敌兵数量变化，改成轮询等待，别写死秒数
+	var waited: float = 0.0
+	while waited < 15.0 and int(b.turn_state.turn) == turn0:
+		await _wait(0.25)
+		waited += 0.25
 	print("  第二次空格后：phase=%d，turn=%d" % [
 		int(b.turn_state.phase), int(b.turn_state.turn)])
 	_check(int(b.turn_state.turn) == turn0 + 1, "再按一次空格 → 回合确实推进（%d → %d）" % [turn0, int(b.turn_state.turn)])

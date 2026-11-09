@@ -21,6 +21,16 @@ static func load_for(unit_id: String) -> Texture2D:
 		var tex = load(path)
 		if tex is Texture2D:
 			return tex
+	# 回退：dao_bing_3 → dao_bing_1（同一兵种换个编号，不该因为少一张图就变成占位符）
+	var base := key
+	var cut := base.rfind("_")
+	if cut > 0 and base.substr(cut + 1).is_valid_int():
+		base = base.substr(0, cut)
+		var alt := DIR + base + "_1.png"
+		if ResourceLoader.exists(alt):
+			var t2 = load(alt)
+			if t2 is Texture2D:
+				return t2
 	return null
 
 

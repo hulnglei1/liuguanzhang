@@ -31,7 +31,7 @@ func _init() -> void:
 	# ---- 2. 不应战惩罚：敌军×2 ----
 	MoraleCore.apply_refuse_penalty([huaxiong, dao])
 	var hx_atk: int = huaxiong.effective_atk()
-	if hx_atk != 52:  # 26×2=52（无其他修正）
+	if hx_atk != int(round(huaxiong.base_atk * 2)):   # 不应战 ×2（不写死快照值）
 		print("[FAIL] 不应战后华雄ATK应为52，实际 ", hx_atk)
 		failed += 1
 	else:
