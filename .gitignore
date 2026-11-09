@@ -43,3 +43,9 @@ game/
 !**/assets/units/*.png
 !**/assets/tiles/*.png
 !**/assets/icons/*.png
+
+# 7. 构建产物（便携包含 172MB 的 Godot 运行时，超 GitHub 单文件 100MB 限制）
+build/
+build_portable/
+zcode项目/build/
+*.tpz
